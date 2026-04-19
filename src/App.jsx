@@ -47,6 +47,7 @@ const SERVICE_TYPES = [
 ];
 
 export default function App() {
+  const [hasSearched, setHasSearched] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRegion, setSelectedRegion] = useState('すべて');
   const [selectedType, setSelectedType] = useState('すべて');
@@ -62,7 +63,7 @@ export default function App() {
   const [editKeywords, setEditKeywords] = useState('');
   const [editTags, setEditTags] = useState('');
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [savingMemo, setSavingMemo] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
@@ -86,17 +87,22 @@ export default function App() {
     }
   };
 
-  useEffect(() => {
-    loadResources();
-  }, []);
-
   const resultCountText = useMemo(() => `${resources.length} 件`, [resources.length]);
 
   const handleSearch = async () => {
-    await loadResources();
-    setSelectedResource(null);
-    setMemo('');
-  };
+  setHasSearched(true);
+  await loadResources();
+  setSelectedResource(null);
+  setMemo('');
+};
+
+const handleReset = () => {
+  setHasSearched(false);
+  setResources([]);
+  setSelectedResource(null);
+  setMemo('');
+  setError('');
+};
 
   const syncEditForm = (detail) => {
   setEditArea(detail.area || '');
@@ -120,6 +126,17 @@ export default function App() {
     : [...currentTags, tag];
 
   setEditTags(nextTags.join(','));
+};
+
+const buildMapUrl = (resource) => {
+  const query = [resource?.businessName, resource?.area]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
+  if (!query) return '';
+
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 };
 
   const handleOpenDetail = async (fileId) => {
@@ -214,17 +231,17 @@ syncEditForm(refreshed.item);
           </div>
 
           <button
-            onClick={handleSearch}
-            className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2 text-sm font-bold text-white"
-          >
-            <RefreshCw className="h-4 w-4" />
-            再読込
-          </button>
+  onClick={handleReset}
+  className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2 text-sm font-bold text-white"
+>
+  <RefreshCw className="h-4 w-4" />
+  リセット
+</button>
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <section className="space-y-6">
+      <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6 lg:h-[calc(100vh-96px)] lg:grid-cols-[1.1fr_0.9fr]">
+        <section className="flex min-h-0 flex-col gap-6 pr-2">
           <div className="rounded-[2rem] border bg-white p-6 shadow-sm">
             <div className="mb-4 flex items-center gap-3">
               <Search className="h-5 w-5 text-slate-400" />
@@ -299,75 +316,82 @@ syncEditForm(refreshed.item);
             </div>
           </div>
 
-          <div className="rounded-[2rem] border bg-white p-6 shadow-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-black">検索結果</h2>
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-600">
-                {resultCountText}
-              </span>
+          <div className="rounded-[2rem] border bg-white p-6 shadow-sm lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+  <div className="mb-4 flex items-center justify-between">
+    <h2 className="text-lg font-black">検索結果</h2>
+    <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-600">
+      {resultCountText}
+    </span>
+  </div>
+
+  {error && (
+    <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+      {error}
+    </div>
+  )}
+
+  {loading ? (
+    <div className="flex items-center justify-center py-16">
+      <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+    </div>
+  ) : !hasSearched ? (
+    <div className="rounded-3xl border-2 border-dashed border-slate-200 px-6 py-16 text-center">
+      <p className="text-lg font-black text-slate-400">まだ検索していません</p>
+      <p className="mt-2 text-sm text-slate-500">
+        条件を入れて「検索する」を押してください
+      </p>
+    </div>
+  ) : resources.length === 0 ? (
+    <div className="rounded-3xl border-2 border-dashed border-slate-200 px-6 py-16 text-center">
+      <p className="text-lg font-black text-slate-400">該当データがありません</p>
+      <p className="mt-2 text-sm text-slate-500">
+        検索条件を変えて再検索してください
+      </p>
+    </div>
+  ) : (
+    <div className="space-y-4">
+      {resources.map((res) => (
+        <button
+          key={res.fileId}
+          onClick={() => handleOpenDetail(res.fileId)}
+          className="block w-full rounded-[2rem] border border-slate-200 bg-slate-50 p-5 text-left transition hover:border-blue-300 hover:bg-white"
+        >
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-wider text-blue-600">
+                {res.serviceType || '未分類'}
+              </p>
+              <h3 className="mt-1 text-lg font-black text-slate-800">
+                {res.businessName || res.fileName}
+              </h3>
             </div>
-
-            {error && (
-              <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                {error}
-              </div>
-            )}
-
-            {loading ? (
-              <div className="flex items-center justify-center py-16">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-              </div>
-            ) : resources.length === 0 ? (
-              <div className="rounded-3xl border-2 border-dashed border-slate-200 px-6 py-16 text-center">
-                <p className="text-lg font-black text-slate-400">該当データがありません</p>
-                <p className="mt-2 text-sm text-slate-500">
-                  GAS の syncDrivePdfs() 実行後に再検索してください
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {resources.map((res) => (
-                  <button
-                    key={res.fileId}
-                    onClick={() => handleOpenDetail(res.fileId)}
-                    className="block w-full rounded-[2rem] border border-slate-200 bg-slate-50 p-5 text-left transition hover:border-blue-300 hover:bg-white"
-                  >
-                    <div className="mb-3 flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-black uppercase tracking-wider text-blue-600">
-                          {res.serviceType || '未分類'}
-                        </p>
-                        <h3 className="mt-1 text-lg font-black text-slate-800">
-                          {res.businessName || res.fileName}
-                        </h3>
-                      </div>
-                      <FileText className="h-5 w-5 text-slate-400" />
-                    </div>
-
-                    <div className="flex flex-wrap gap-3 text-sm text-slate-600">
-                      <span className="inline-flex items-center gap-1">
-                        <MapPin className="h-4 w-4" />
-                        {res.area || '地域未設定'}
-                      </span>
-                      <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-bold text-slate-700">
-                        {res.fileName}
-                      </span>
-                    </div>
-
-                    {res.memo && (
-                      <p className="mt-3 line-clamp-2 text-sm text-slate-500">
-                        最新メモ: {res.memo}
-                      </p>
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
+            <FileText className="h-5 w-5 text-slate-400" />
           </div>
+
+          <div className="flex flex-wrap gap-3 text-sm text-slate-600">
+            <span className="inline-flex items-center gap-1">
+              <MapPin className="h-4 w-4" />
+              {res.area || '地域未設定'}
+            </span>
+            <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-bold text-slate-700">
+              {res.fileName}
+            </span>
+          </div>
+
+          {res.memo && (
+            <p className="mt-3 line-clamp-2 text-sm text-slate-500">
+              最新メモ: {res.memo}
+            </p>
+          )}
+        </button>
+      ))}
+    </div>
+  )}
+</div>
         </section>
 
-        <section>
-          <div className="sticky top-24 rounded-[2rem] border bg-white p-6 shadow-sm">
+        <section className="min-h-0 overflow-y-auto pr-2">
+          <div className="rounded-[2rem] border bg-white p-6 shadow-sm">
             <div className="mb-4 flex items-center gap-3">
               <FolderOpen className="h-5 w-5 text-slate-400" />
               <h2 className="text-lg font-black">詳細 / 管理</h2>
@@ -417,21 +441,37 @@ syncEditForm(refreshed.item);
   </div>
 </div>
 
-                {selectedResource?.driveUrl ? (
-                  <a
-                    href={selectedResource.driveUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    PDFをGoogleドライブで開く
-                  </a>
-                ) : (
-                  <div className="rounded-2xl bg-slate-200 px-4 py-3 text-sm font-bold text-slate-500">
-                    PDFリンク未設定
-                  </div>
-                )}
+<div className="flex flex-wrap gap-3">
+  {selectedResource?.driveUrl ? (
+    <a
+      href={selectedResource.driveUrl}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-bold text-white"
+    >
+      PDFをGoogleドライブで開く
+    </a>
+  ) : (
+    <div className="rounded-2xl bg-slate-200 px-4 py-3 text-sm font-bold text-slate-500">
+      PDFリンク未設定
+    </div>
+  )}
+
+  {buildMapUrl(selectedResource) ? (
+    <a
+      href={buildMapUrl(selectedResource)}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white"
+    >
+      地図で見る
+    </a>
+  ) : (
+    <div className="rounded-2xl bg-slate-200 px-4 py-3 text-sm font-bold text-slate-500">
+      地図情報未設定
+    </div>
+  )}
+</div>
 
                 <div className="rounded-3xl border border-slate-200 p-4">
                   <div className="mb-3 flex items-center gap-2">
