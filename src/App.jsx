@@ -394,7 +394,7 @@ syncEditForm(refreshed.item);
         </section>
 
         <section className="min-h-0 overflow-y-auto pr-2">
-          <div className="rounded-[2rem] border bg-white p-6 shadow-sm">
+          <div className="rounded-[2rem] border bg-white p-6 shadow-sm min-h-[600px] lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
             <div className="mb-4 flex items-center gap-3">
               <FolderOpen className="h-5 w-5 text-slate-400" />
               <h2 className="text-lg font-black">詳細 / 管理</h2>
