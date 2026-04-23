@@ -54,6 +54,10 @@ const SUPPORT_FLAG_OPTIONS = [
   '送迎あり',
   '医療的ケア対応',
   '強度行動障害対応',
+  '重度訪問介護',
+  '重心対応',
+  '行動援護',
+  '同行援護',
 ];
 
 export default function App() {
