@@ -50,6 +50,12 @@ const SERVICE_TYPES = [
   'その他',
 ];
 
+const SUPPORT_FLAG_OPTIONS = [
+  '送迎あり',
+  '医療的ケア対応',
+  '強度行動障害対応',
+];
+
 export default function App() {
   const [hasSearched, setHasSearched] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -72,6 +78,7 @@ export default function App() {
   const [savingMemo, setSavingMemo] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [error, setError] = useState('');
+  const [editSupportFlags, setEditSupportFlags] = useState('');
 
   const loadResources = async () => {
     try {
@@ -114,6 +121,7 @@ const handleReset = () => {
   setEditBusinessName(detail.businessName || '');
   setEditKeywords(detail.keywords || '');
   setEditTags(detail.tags || '');
+  setEditSupportFlags(detail.supportFlags || '');
   setMemo('');
 };
 
@@ -130,6 +138,21 @@ const handleReset = () => {
     : [...currentTags, tag];
 
   setEditTags(nextTags.join(','));
+};
+
+const toggleSupportFlag = (flag) => {
+  const currentFlags = String(editSupportFlags || '')
+    .split(',')
+    .map(v => v.trim())
+    .filter(Boolean);
+
+  const exists = currentFlags.includes(flag);
+
+  const nextFlags = exists
+    ? currentFlags.filter(v => v !== flag)
+    : [...currentFlags, flag];
+
+  setEditSupportFlags(nextFlags.join(','));
 };
 
 const buildMapUrl = (resource) => {
@@ -192,13 +215,15 @@ syncEditForm(refreshed.item);
     try {
       setSavingEdit(true);
       setError('');
-      const result = await updateResource({
+      
+     const result = await updateResource({
   fileId: selectedResource.fileId,
   area: editArea,
   serviceType: editServiceType,
   businessName: editBusinessName,
   keywords: editKeywords,
   tags: editTags,
+  supportFlags: editSupportFlags,
 });
 
       if (!result.ok) {
@@ -358,7 +383,7 @@ syncEditForm(refreshed.item);
         <button
           key={res.fileId}
           onClick={() => handleOpenDetail(res.fileId)}
-          className="block w-full rounded-[2rem] border border-slate-200 bg-slate-50 p-4 text-left transition hover:border-blue-300 hover:bg-white"
+          className="block w-full rounded-[2rem] border border-slate-200 bg-slate-50 p-4 text-left transition hover:border-blue-300 hover:bg-white">
           <div className="mb-3 flex items-start justify-between gap-3">
             <div>
               <p className="text-xs font-black uppercase tracking-wider text-blue-600">
@@ -433,6 +458,10 @@ syncEditForm(refreshed.item);
       <p className="font-bold text-slate-500">キーワード</p>
       <p>{selectedResource.keywords || '未設定'}</p>
     </div>
+    <div>
+      <p className="font-bold text-slate-500">必須情報</p>
+      <p>{selectedResource?.supportFlags || '未設定'}</p>
+      </div>
     <div>
       <p className="font-bold text-slate-500">タグ</p>
       <p>{selectedResource?.tags || '未設定'}</p>
@@ -519,6 +548,44 @@ syncEditForm(refreshed.item);
                         className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-500"
                       />
                     </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-bold text-slate-600">必須情報</label>
+                      
+                      <div className="mb-3 flex flex-wrap gap-2">
+                        {SUPPORT_FLAG_OPTIONS.map((flag) => {
+                          const selectedFlags = String(editSupportFlags || '')
+                          .split(',')
+                          .map(v => v.trim())
+                          .filter(Boolean);
+                          
+                          const isActive = selectedFlags.includes(flag);
+                          
+                          return (
+                          <button
+                          key={flag}
+                          type="button"
+                          onClick={() => toggleSupportFlag(flag)}
+                          className={`rounded-2xl px-3 py-2 text-sm font-bold ${
+                            isActive
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-slate-100 text-slate-600'
+                           }`}
+                           >
+                            {flag}
+                            </button>
+                            );
+                            })}
+                            </div>
+                            
+                            <input
+                            value={editSupportFlags}
+                            onChange={(e) => setEditSupportFlags(e.target.value)}
+                            placeholder="例: 送迎あり,医療的ケア対応"
+                            className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-500"
+                            />
+                            <p className="mt-1 text-xs text-slate-400">カンマ区切りで手入力もできます</p>
+                            </div>
 
                     <button
                     onClick={handleSaveEdit}
