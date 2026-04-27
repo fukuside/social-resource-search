@@ -12,7 +12,11 @@ import {
   Edit3,
   History,
 } from 'lucide-react';
-import { getResourceDetail, saveMemo, searchResources, updateResource } from './api';
+import { searchResources,
+  getResourceDetail,
+  updateResource,
+  saveMemo,
+  deleteMemoLog, } from './api';
 import './index.css';
 
 const REGIONS = [
@@ -212,6 +216,30 @@ syncEditForm(refreshed.item);
       setSavingMemo(false);
     }
   };
+
+  async function handleDeleteMemoLog(logId) {
+  const ok = window.confirm('この履歴メモを削除しますか？');
+  if (!ok) return;
+
+  try {
+    const result = await deleteMemoLog(logId);
+
+    if (!result.ok) {
+      alert(result.error || '削除に失敗しました');
+      return;
+    }
+
+    const detail = await getResourceDetail(result.fileId);
+
+    setSelectedResource(detail.item);
+    setSelectedResource({
+  ...detail.item,
+  memoLogs: detail.memoLogs || [],
+});
+  } catch (error) {
+    alert(error.message || '削除に失敗しました');
+  }
+}
 
   const handleSaveEdit = async () => {
     if (!selectedResource?.fileId) return;
@@ -631,14 +659,31 @@ syncEditForm(refreshed.item);
                         <p className="text-sm text-slate-400">メモ履歴はまだありません</p>
                       ) : (
                         selectedResource.memoLogs.map((log) => (
-                          <div key={log.logId} className="rounded-2xl bg-slate-50 p-3 text-sm">
-                            <div className="mb-1 flex items-center justify-between gap-2">
-                              <span className="font-bold text-slate-600">{log.createdBy || 'manual'}</span>
-                              <span className="text-xs text-slate-400">{String(log.createdAt || '')}</span>
-                            </div>
-                            <p className="whitespace-pre-wrap text-slate-700">{log.memo}</p>
-                          </div>
-                        ))
+  <div key={log.logId} className="rounded-2xl bg-slate-50 p-3 text-sm">
+    <div className="mb-1 flex items-center justify-between gap-2">
+      <span className="font-bold text-slate-600">
+        {log.createdBy || 'manual'}
+      </span>
+
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-slate-400">
+          {String(log.createdAt || '')}
+        </span>
+
+        <button
+          onClick={() => handleDeleteMemoLog(log.logId)}
+          className="text-xs font-bold text-red-500 hover:text-red-700"
+        >
+          削除
+        </button>
+      </div>
+    </div>
+
+    <p className="whitespace-pre-wrap text-slate-700">
+      {log.memo}
+    </p>
+  </div>
+))
                       )}
                     </div>
                   </div>

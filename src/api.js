@@ -70,3 +70,22 @@ export async function saveMemo(fileId, memo, createdBy = 'manual') {
 
   return res.json();
 }
+
+export async function deleteMemoLog(logId) {
+  const res = await fetch(GAS_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'text/plain;charset=utf-8',
+    },
+    body: JSON.stringify({
+      action: 'deleteMemoLog',
+      logId,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error('メモ削除に失敗しました');
+  }
+
+  return res.json();
+}
