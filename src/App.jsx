@@ -231,7 +231,6 @@ syncEditForm(refreshed.item);
 
     const detail = await getResourceDetail(result.fileId);
 
-    setSelectedResource(detail.item);
     setSelectedResource({
   ...detail.item,
   memoLogs: detail.memoLogs || [],
@@ -671,6 +670,7 @@ syncEditForm(refreshed.item);
         </span>
 
         <button
+          type="button"
           onClick={() => handleDeleteMemoLog(log.logId)}
           className="text-xs font-bold text-red-500 hover:text-red-700"
         >
@@ -679,9 +679,7 @@ syncEditForm(refreshed.item);
       </div>
     </div>
 
-    <p className="whitespace-pre-wrap text-slate-700">
-      {log.memo}
-    </p>
+    <p className="whitespace-pre-wrap text-slate-700">{log.memo}</p>
   </div>
 ))
                       )}
