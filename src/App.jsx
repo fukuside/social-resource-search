@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import logo from './assets/logo2.png';
 import {
   Search,
   MapPin,
@@ -281,14 +282,21 @@ syncEditForm(refreshed.item);
       <header className="sticky top-0 z-20 border-b bg-white/90 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
           <div className="flex items-center gap-3">
-            <div className="rounded-2xl bg-blue-600 p-2 text-white shadow-lg">
-              <FileSearch className="h-5 w-5" />
-            </div>
-            <div>
-              <h1 className="text-xl font-black tracking-tight">社会資源パンフレット検索</h1>
-              <p className="text-sm text-slate-500">Googleドライブ / GAS / PDFメモ管理</p>
-            </div>
-          </div>
+  <img
+    src={logo}
+    alt="福祉ロゴ"
+    className="h-12 w-12 object-contain"
+  />
+
+  <div>
+    <h1 className="text-xl font-bold text-slate-900">
+      社会資源パンフレット検索
+    </h1>
+    <p className="text-sm text-slate-500">
+      GoogleDrive / GAS / PDFメモ管理
+    </p>
+  </div>
+</div>
 
           <button
   onClick={handleReset}
@@ -670,12 +678,12 @@ syncEditForm(refreshed.item);
         </span>
 
         <button
-          type="button"
-          onClick={() => handleDeleteMemoLog(log.logId)}
-          className="text-xs font-bold text-red-500 hover:text-red-700"
-        >
-          削除
-        </button>
+  type="button"
+  onClick={() => handleDeleteMemoLog(log.logId)}
+  className="rounded-xl bg-white px-3 py-1 text-xs font-bold text-red-600 shadow-md ring-1 ring-red-100 transition hover:-translate-y-0.5 hover:bg-red-50 hover:shadow-lg active:translate-y-0 active:shadow-sm"
+>
+  削除
+</button>
       </div>
     </div>
 
