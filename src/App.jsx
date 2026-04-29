@@ -308,7 +308,7 @@ syncEditForm(refreshed.item);
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6 lg:h-[calc(100vh-96px)] lg:grid-cols-[1.1fr_0.9fr]">
+      <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6 xl:h-[calc(100vh-96px)] xl:grid-cols-[1.1fr_0.9fr]">
         <section className="flex min-h-0 flex-col gap-6 pr-2">
           <div className="rounded-[2rem] border bg-white p-6 shadow-sm">
             <div className="mb-4 flex items-center gap-3">
@@ -457,7 +457,7 @@ syncEditForm(refreshed.item);
 </div>
         </section>
 
-        <section className="min-h-0 overflow-y-auto pr-2">
+        <section className="min-h-0 overflow-y-auto xl:pr-2">
           <div className="rounded-[2rem] border bg-white p-6 shadow-sm min-h-[600px] lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
             <div className="mb-4 flex items-center gap-3">
               <FolderOpen className="h-5 w-5 text-slate-400" />
