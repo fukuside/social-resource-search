@@ -89,6 +89,7 @@ export default function App() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [error, setError] = useState('');
   const [editSupportFlags, setEditSupportFlags] = useState('');
+  const [editSupportNotes, setEditSupportNotes] = useState(['', '', '', '', '']);
 
   const loadResources = async () => {
     try {
@@ -132,6 +133,19 @@ const handleReset = () => {
   setEditKeywords(detail.keywords || '');
   setEditTags(detail.tags || '');
   setEditSupportFlags(detail.supportFlags || '');
+
+  const notes = String(detail.supportNotes || '')
+    .split('｜')
+    .map(v => v.trim());
+
+  setEditSupportNotes([
+    notes[0] || '',
+    notes[1] || '',
+    notes[2] || '',
+    notes[3] || '',
+    notes[4] || '',
+  ]);
+
   setMemo('');
 };
 
@@ -257,6 +271,10 @@ syncEditForm(refreshed.item);
   keywords: editKeywords,
   tags: editTags,
   supportFlags: editSupportFlags,
+  supportNotes: editSupportNotes
+  .map(v => v.trim())
+  .filter(Boolean)
+  .join('｜'),
 });
 
       if (!result.ok) {
@@ -432,6 +450,25 @@ syncEditForm(refreshed.item);
               <h3 className="mt-1 text-lg font-black text-slate-800">
                 {res.businessName || res.fileName}
               </h3>
+              <div className="mt-2 flex flex-wrap gap-2">
+  {[
+    ...String(res.supportFlags || '')
+      .split(',')
+      .map(v => v.trim())
+      .filter(Boolean),
+    ...String(res.supportNotes || '')
+      .split('｜')
+      .map(v => v.trim())
+      .filter(Boolean),
+  ].map((label) => (
+    <span
+      key={label}
+      className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800 shadow-sm ring-1 ring-amber-200"
+    >
+      {label}
+    </span>
+  ))}
+</div>
             </div>
             <FileText className="h-5 w-5 text-slate-400" />
           </div>
@@ -502,6 +539,10 @@ syncEditForm(refreshed.item);
       <p className="font-bold text-slate-500">必須情報</p>
       <p>{selectedResource?.supportFlags || '未設定'}</p>
       </div>
+      <div>
+  <p className="font-bold text-slate-500">必須情報メモ</p>
+  <p>{selectedResource?.supportNotes || '未設定'}</p>
+</div>
     <div>
       <p className="font-bold text-slate-500">タグ</p>
       <p>{selectedResource?.tags || '未設定'}</p>
@@ -626,6 +667,27 @@ syncEditForm(refreshed.item);
                             />
                             <p className="mt-1 text-xs text-slate-400">カンマ区切りで手入力もできます</p>
                             </div>
+                            <div className="mt-4">
+  <label className="mb-2 block text-sm font-bold text-slate-600">
+    必須情報メモ
+  </label>
+
+  <div className="space-y-2">
+    {editSupportNotes.map((note, index) => (
+      <input
+        key={index}
+        value={note}
+        onChange={(e) => {
+          const next = [...editSupportNotes];
+          next[index] = e.target.value;
+          setEditSupportNotes(next);
+        }}
+        placeholder={`短文メモ ${index + 1}`}
+        className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-500"
+      />
+    ))}
+  </div>
+</div>
 
                     <button
                     onClick={handleSaveEdit}
