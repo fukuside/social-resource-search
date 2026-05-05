@@ -317,13 +317,24 @@ syncEditForm(refreshed.item);
   </div>
 </div>
 
-          <button
-  onClick={handleReset}
-  className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2 text-sm font-bold text-white"
->
-  <RefreshCw className="h-4 w-4" />
-  リセット
-</button>
+          <div className="flex items-center gap-2">
+  <a
+    href="https://drive.google.com/drive/folders/1blm-UZNHp0XccNfVY19WOvM4omWwrEmr"
+    target="_blank"
+    rel="noreferrer"
+    className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-md ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-lg active:translate-y-0 active:shadow-sm"
+  >
+    📁 PDFアップロード
+  </a>
+
+  <button
+    onClick={handleReset}
+    className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2 text-sm font-bold text-white"
+  >
+    <RefreshCw className="h-4 w-4" />
+    リセット
+  </button>
+</div>
         </div>
       </header>
 
