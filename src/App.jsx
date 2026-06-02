@@ -70,7 +70,7 @@ const SUPPORT_FLAG_OPTIONS = [
 export default function App() {
   const [hasSearched, setHasSearched] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedRegion, setSelectedRegion] = useState('すべて');
+  const [selectedRegions, setSelectedRegions] = useState([]);
   const [selectedType, setSelectedType] = useState('すべて');
   const [onlyUnclassified, setOnlyUnclassified] = useState(false);
 
@@ -98,7 +98,7 @@ export default function App() {
       setError('');
       const data = await searchResources({
         q: searchQuery,
-        area: selectedRegion,
+        area: selectedRegions.join(','),
         serviceType: selectedType,
         onlyUnclassified,
       });
@@ -360,19 +360,39 @@ syncEditForm(refreshed.item);
                 <div>
                   <p className="mb-2 text-sm font-bold text-slate-500">地域</p>
                   <div className="flex flex-wrap gap-2">
-                    {REGIONS.map((region) => (
-                      <button
-                        key={region}
-                        onClick={() => setSelectedRegion(region)}
-                        className={`rounded-2xl px-3 py-2 text-sm font-bold ${
-                          selectedRegion === region
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-slate-100 text-slate-600'
-                        }`}
-                      >
-                        {region}
-                      </button>
-                    ))}
+                    {REGIONS.map((region) => {
+  const selected = selectedRegions.includes(region);
+
+  return (
+    <button
+      key={region}
+      type="button"
+      onClick={() => {
+        if (region === 'すべて') {
+          setSelectedRegions([]);
+          return;
+        }
+
+        setSelectedRegions((prev) =>
+          prev.includes(region)
+            ? prev.filter(v => v !== region)
+            : [...prev, region]
+        );
+      }}
+      className={`rounded-2xl px-3 py-2 text-sm font-bold ${
+        region === 'すべて'
+          ? selectedRegions.length === 0
+            ? 'bg-blue-600 text-white'
+            : 'bg-slate-100 text-slate-600'
+          : selected
+            ? 'bg-blue-600 text-white'
+            : 'bg-slate-100 text-slate-600'
+      }`}
+    >
+      {region === 'すべて' ? 'すべて' : selected ? `✓ ${region}` : region}
+    </button>
+  );
+})}
                   </div>
                 </div>
 
