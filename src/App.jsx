@@ -73,6 +73,7 @@ export default function App() {
   const [selectedRegions, setSelectedRegions] = useState([]);
   const [selectedType, setSelectedType] = useState('すべて');
   const [onlyUnclassified, setOnlyUnclassified] = useState(false);
+  const [includeDeleted, setIncludeDeleted] = useState(false);
 
   const [resources, setResources] = useState([]);
   const [selectedResource, setSelectedResource] = useState(null);
