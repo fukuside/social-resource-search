@@ -101,6 +101,7 @@ export default function App() {
         area: selectedRegions.join(','),
         serviceType: selectedType,
         onlyUnclassified,
+        includeDeleted,
       });
       setResources(data.results || []);
     } catch (err) {
@@ -125,6 +126,7 @@ const handleReset = () => {
   setSelectedResource(null);
   setMemo('');
   setError('');
+  setIncludeDeleted(false);
 };
 
   const syncEditForm = (detail) => {
@@ -422,7 +424,7 @@ syncEditForm(refreshed.item);
                   checked={onlyUnclassified}
                   onChange={(e) => setOnlyUnclassified(e.target.checked)}
                 />
-                未分類・要修正のみ表示
+                削除済みも表示
               </label>
 
               <button
@@ -479,10 +481,25 @@ syncEditForm(refreshed.item);
               <p className="text-xs font-black uppercase tracking-wider text-blue-600">
                 {res.serviceType || '未分類'}
               </p>
-              <h3 className="mt-1 text-lg font-black text-slate-800">
-                {res.businessName || res.fileName}
-              </h3>
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="mt-1 flex items-center gap-2">
+  <h3 className="text-lg font-black text-slate-800">
+    {res.businessName || res.fileName}
+  </h3>
+
+  {String(res.isDeleted || '').toLowerCase() === 'true' && (
+    <span className="rounded-full bg-red-100 px-2 py-1 text-xs font-bold text-red-700 ring-1 ring-red-200">
+      削除済み
+    </span>
+  )}
+</div>
+{String(res.isDeleted || '').toLowerCase() === 'true' &&
+  res.deletedAt && (
+    <p className="mt-1 text-xs font-bold text-red-500">
+      削除日：
+      {new Date(res.deletedAt).toLocaleString('ja-JP')}
+    </p>
+)}
+<div className="mt-2 flex flex-wrap gap-2">
   {[
     ...String(res.supportFlags || '')
       .split(',')

@@ -4,6 +4,7 @@ export async function searchResources({
   area = 'すべて',
   serviceType = 'すべて',
   onlyUnclassified = false,
+  includeDeleted = false,
 }) {
   const url = new URL(GAS_URL);
   url.searchParams.set('action', 'search');
@@ -11,7 +12,7 @@ export async function searchResources({
   url.searchParams.set('area', area);
   url.searchParams.set('serviceType', serviceType);
   url.searchParams.set('onlyUnclassified', String(onlyUnclassified));
-
+  url.searchParams.set('includeDeleted', String(includeDeleted));
   const res = await fetch(url.toString());
   if (!res.ok) {
     throw new Error('検索に失敗しました');
