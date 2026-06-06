@@ -67,6 +67,18 @@ const SUPPORT_FLAG_OPTIONS = [
   '同行援護',
 ];
 
+const parseCommaValues = (value) =>
+  String(value || '')
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean);
+
+const parseSupportNotes = (value) =>
+  String(value || '')
+    .split('｜')
+    .map((v) => v.trim())
+    .filter(Boolean);
+
 export default function App() {
   const [hasSearched, setHasSearched] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -342,209 +354,223 @@ syncEditForm(refreshed.item);
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6 xl:h-[calc(100vh-96px)] xl:grid-cols-[1.1fr_0.9fr]">
-        <section className="flex min-h-0 flex-col gap-6 pr-2">
-          <div className="rounded-[2rem] border bg-white p-6 shadow-sm">
-            <div className="mb-4 flex items-center gap-3">
-              <Search className="h-5 w-5 text-slate-400" />
-              <h2 className="text-lg font-black">検索</h2>
+      <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6 xl:h-[calc(100vh-96px)] xl:grid-cols-[0.85fr_1fr_1.05fr]">
+  {/* 左：検索条件 */}
+  <section className="min-h-0 overflow-y-auto xl:pr-2">
+    <div className="rounded-[2rem] border bg-white p-6 shadow-sm">
+      <div className="mb-4 flex items-center gap-3">
+        <Search className="h-5 w-5 text-slate-400" />
+        <h2 className="text-lg font-black">検索</h2>
+      </div>
+
+      <div className="space-y-4">
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="地名、事業名、キーワード、メモで検索"
+          className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-base outline-none focus:border-blue-500"
+        />
+
+        <div className="grid gap-4">
+          <div>
+            <p className="mb-2 text-sm font-bold text-slate-500">地域</p>
+            <div className="flex flex-wrap gap-2">
+              {REGIONS.map((region) => {
+                const selected = selectedRegions.includes(region);
+
+                return (
+                  <button
+                    key={region}
+                    type="button"
+                    onClick={() => {
+                      if (region === 'すべて') {
+                        setSelectedRegions([]);
+                        return;
+                      }
+
+                      setSelectedRegions((prev) =>
+                        prev.includes(region)
+                          ? prev.filter((v) => v !== region)
+                          : [...prev, region]
+                      );
+                    }}
+                    className={`rounded-2xl px-3 py-2 text-sm font-bold ${
+                      region === 'すべて'
+                        ? selectedRegions.length === 0
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-slate-100 text-slate-600'
+                        : selected
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-slate-100 text-slate-600'
+                    }`}
+                  >
+                    {region === 'すべて' ? 'すべて' : selected ? `✓ ${region}` : region}
+                  </button>
+                );
+              })}
             </div>
+          </div>
 
-            <div className="space-y-4">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="地名、事業名、キーワード、メモで検索"
-                className="w-full rounded-2xl border border-slate-200 px-4 py-4 text-base outline-none focus:border-blue-500"
-              />
+          <div>
+            <p className="mb-2 text-sm font-bold text-slate-500">サービス種別</p>
+            <div className="flex flex-wrap gap-2">
+              {SERVICE_TYPES.map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setSelectedType(type)}
+                  className={`rounded-2xl px-3 py-2 text-sm font-bold ${
+                    selectedType === type
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <p className="mb-2 text-sm font-bold text-slate-500">地域</p>
-                  <div className="flex flex-wrap gap-2">
-                    {REGIONS.map((region) => {
-  const selected = selectedRegions.includes(region);
+        <label className="flex items-center gap-2 text-sm font-bold text-red-600">
+          <input
+            type="checkbox"
+            checked={includeDeleted}
+            onChange={(e) => setIncludeDeleted(e.target.checked)}
+          />
+          削除済みも表示
+        </label>
 
-  return (
-    <button
-      key={region}
-      type="button"
-      onClick={() => {
-        if (region === 'すべて') {
-          setSelectedRegions([]);
-          return;
-        }
+        <button
+          onClick={handleSearch}
+          className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white"
+        >
+          <Search className="h-4 w-4" />
+          検索する
+        </button>
+      </div>
+    </div>
+  </section>
 
-        setSelectedRegions((prev) =>
-          prev.includes(region)
-            ? prev.filter(v => v !== region)
-            : [...prev, region]
-        );
-      }}
-      className={`rounded-2xl px-3 py-2 text-sm font-bold ${
-        region === 'すべて'
-          ? selectedRegions.length === 0
-            ? 'bg-blue-600 text-white'
-            : 'bg-slate-100 text-slate-600'
-          : selected
-            ? 'bg-blue-600 text-white'
-            : 'bg-slate-100 text-slate-600'
-      }`}
-    >
-      {region === 'すべて' ? 'すべて' : selected ? `✓ ${region}` : region}
-    </button>
-  );
-})}
+  {/* 中央：検索結果 */}
+  <section className="min-h-0 overflow-y-auto xl:pr-2">
+    <div className="rounded-[2rem] border bg-white p-6 shadow-sm min-h-[600px] xl:h-full xl:min-h-0 xl:overflow-y-auto">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-lg font-black">検索結果</h2>
+        <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-600">
+          {resultCountText}
+        </span>
+      </div>
+
+      {error && (
+        <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        </div>
+      ) : !hasSearched ? (
+        <div className="rounded-3xl border-2 border-dashed border-slate-200 px-6 py-16 text-center">
+          <p className="text-lg font-black text-slate-400">まだ検索していません</p>
+          <p className="mt-2 text-sm text-slate-500">
+            条件を入れて「検索する」を押してください
+          </p>
+        </div>
+      ) : resources.length === 0 ? (
+        <div className="rounded-3xl border-2 border-dashed border-slate-200 px-6 py-16 text-center">
+          <p className="text-lg font-black text-slate-400">該当データがありません</p>
+          <p className="mt-2 text-sm text-slate-500">
+            検索条件を変えて再検索してください
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {resources.map((res) => (
+            <button
+              key={res.fileId}
+              type="button"
+              onClick={() => handleOpenDetail(res.fileId)}
+              className="block w-full rounded-[2rem] border border-slate-200 bg-slate-50 p-4 text-left transition hover:border-blue-300 hover:bg-white"
+            >
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="mb-2 flex flex-wrap gap-2">
+                    <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-black text-blue-700 ring-1 ring-blue-200">
+                      {res.serviceType || '未分類'}
+                    </span>
+
+                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-200 px-3 py-1 text-xs font-bold text-slate-700">
+                      <MapPin className="h-3.5 w-3.5" />
+                      {res.area || '地域未設定'}
+                    </span>
+
+                    {String(res.isDeleted || '').toLowerCase() === 'true' && (
+                      <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-700 ring-1 ring-red-200">
+                        削除済み
+                      </span>
+                    )}
                   </div>
+
+                  <h3 className="text-lg font-black leading-snug text-slate-800">
+                    {res.businessName || res.fileName}
+                  </h3>
+
+                  {String(res.isDeleted || '').toLowerCase() === 'true' && res.deletedAt && (
+                    <p className="mt-1 text-xs font-bold text-red-500">
+                      削除日：{new Date(res.deletedAt).toLocaleString('ja-JP')}
+                    </p>
+                  )}
+
+                  {(parseCommaValues(res.supportFlags).length > 0 || parseSupportNotes(res.supportNotes).length > 0) && (
+                    <div className="mt-3 space-y-2">
+                      {parseCommaValues(res.supportFlags).length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {parseCommaValues(res.supportFlags).map((label) => (
+                            <span
+                              key={`flag-${label}`}
+                              className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800 shadow-sm ring-1 ring-emerald-200"
+                            >
+                              {label}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {parseSupportNotes(res.supportNotes).length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {parseSupportNotes(res.supportNotes).map((label, index) => (
+                            <span
+                              key={`note-${index}-${label}`}
+                              className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800 shadow-sm ring-1 ring-amber-200"
+                            >
+                              メモ：{label}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
-                <div>
-                  <p className="mb-2 text-sm font-bold text-slate-500">サービス種別</p>
-                  <div className="flex flex-wrap gap-2">
-                    {SERVICE_TYPES.map((type) => (
-                      <button
-                        key={type}
-                        onClick={() => setSelectedType(type)}
-                        className={`rounded-2xl px-3 py-2 text-sm font-bold ${
-                          selectedType === type
-                            ? 'bg-indigo-600 text-white'
-                            : 'bg-slate-100 text-slate-600'
-                        }`}
-                      >
-                        {type}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <FileText className="h-5 w-5 shrink-0 text-slate-400" />
               </div>
 
-              <label className="flex items-center gap-2 text-sm font-bold text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={onlyUnclassified}
-                  onChange={(e) => setOnlyUnclassified(e.target.checked)}
-                />
-                削除済みも表示
-              </label>
-
-              <button
-                onClick={handleSearch}
-                className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white"
-              >
-                <Search className="h-4 w-4" />
-                検索する
-              </button>
-            </div>
-          </div>
-
-          <div className="rounded-[2rem] border bg-white p-6 shadow-sm min-h-[600px] lg:min-h-0 lg:h-full lg:flex-1 lg:overflow-y-auto">
-  <div className="mb-4 flex items-center justify-between">
-    <h2 className="text-lg font-black">検索結果</h2>
-    <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-600">
-      {resultCountText}
-    </span>
-  </div>
-
-  {error && (
-    <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-      {error}
+              {res.memo && (
+                <p className="mt-3 line-clamp-2 rounded-2xl bg-white px-3 py-2 text-sm text-slate-500 ring-1 ring-slate-200">
+                  最新メモ: {res.memo}
+                </p>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
-  )}
-
-  {loading ? (
-    <div className="flex items-center justify-center py-16">
-      <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-    </div>
-  ) : !hasSearched ? (
-    <div className="rounded-3xl border-2 border-dashed border-slate-200 px-6 py-16 text-center">
-      <p className="text-lg font-black text-slate-400">まだ検索していません</p>
-      <p className="mt-2 text-sm text-slate-500">
-        条件を入れて「検索する」を押してください
-      </p>
-    </div>
-  ) : resources.length === 0 ? (
-    <div className="rounded-3xl border-2 border-dashed border-slate-200 px-6 py-16 text-center">
-      <p className="text-lg font-black text-slate-400">該当データがありません</p>
-      <p className="mt-2 text-sm text-slate-500">
-        検索条件を変えて再検索してください
-      </p>
-    </div>
-  ) : (
-    <div className="space-y-4">
-      {resources.map((res) => (
-        <button
-          key={res.fileId}
-          onClick={() => handleOpenDetail(res.fileId)}
-          className="block w-full rounded-[2rem] border border-slate-200 bg-slate-50 p-4 text-left transition hover:border-blue-300 hover:bg-white">
-          <div className="mb-3 flex items-start justify-between gap-3">
-            <div>
-              <p className="text-xs font-black uppercase tracking-wider text-blue-600">
-                {res.serviceType || '未分類'}
-              </p>
-              <div className="mt-1 flex items-center gap-2">
-  <h3 className="text-lg font-black text-slate-800">
-    {res.businessName || res.fileName}
-  </h3>
-
-  {String(res.isDeleted || '').toLowerCase() === 'true' && (
-    <span className="rounded-full bg-red-100 px-2 py-1 text-xs font-bold text-red-700 ring-1 ring-red-200">
-      削除済み
-    </span>
-  )}
-</div>
-{String(res.isDeleted || '').toLowerCase() === 'true' &&
-  res.deletedAt && (
-    <p className="mt-1 text-xs font-bold text-red-500">
-      削除日：
-      {new Date(res.deletedAt).toLocaleString('ja-JP')}
-    </p>
-)}
-<div className="mt-2 flex flex-wrap gap-2">
-  {[
-    ...String(res.supportFlags || '')
-      .split(',')
-      .map(v => v.trim())
-      .filter(Boolean),
-    ...String(res.supportNotes || '')
-      .split('｜')
-      .map(v => v.trim())
-      .filter(Boolean),
-  ].map((label) => (
-    <span
-      key={label}
-      className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800 shadow-sm ring-1 ring-amber-200"
-    >
-      {label}
-    </span>
-  ))}
-</div>
-            </div>
-            <FileText className="h-5 w-5 text-slate-400" />
-          </div>
-
-          <div className="flex flex-wrap gap-3 text-sm text-slate-600">
-            <span className="inline-flex items-center gap-1">
-              <MapPin className="h-4 w-4" />
-              {res.area || '地域未設定'}
-            </span>
-            <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-bold text-slate-700">
-              {res.fileName}
-            </span>
-          </div>
-
-          {res.memo && (
-            <p className="mt-3 line-clamp-2 text-sm text-slate-500">
-              最新メモ: {res.memo}
-            </p>
-          )}
-        </button>
-      ))}
-    </div>
-  )}
-</div>
-        </section>
-
+  </section>
+        
         <section className="min-h-0 overflow-y-auto xl:pr-2">
           <div className="rounded-[2rem] border bg-white p-6 shadow-sm min-h-[600px] lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
             <div className="mb-4 flex items-center gap-3">
@@ -570,39 +596,6 @@ syncEditForm(refreshed.item);
                     {selectedResource.businessName || selectedResource.fileName}
                   </h3>
                 </div>
-
-                <div className="rounded-3xl bg-slate-50 p-4">
-  <div className="grid gap-3 text-sm">
-    <div>
-      <p className="font-bold text-slate-500">ファイル名</p>
-      <p className="break-all text-slate-800">{selectedResource.fileName}</p>
-    </div>
-    <div>
-      <p className="font-bold text-slate-500">地域</p>
-      <p>{selectedResource.area || '未設定'}</p>
-    </div>
-    <div>
-      <p className="font-bold text-slate-500">キーワード</p>
-      <p>{selectedResource.keywords || '未設定'}</p>
-    </div>
-    <div>
-      <p className="font-bold text-slate-500">必須情報</p>
-      <p>{selectedResource?.supportFlags || '未設定'}</p>
-      </div>
-      <div>
-  <p className="font-bold text-slate-500">必須情報メモ</p>
-  <p>{selectedResource?.supportNotes || '未設定'}</p>
-</div>
-    <div>
-      <p className="font-bold text-slate-500">タグ</p>
-      <p>{selectedResource?.tags || '未設定'}</p>
-    </div>
-    <div>
-      <p className="font-bold text-slate-500">更新日時</p>
-      <p>{String(selectedResource.updatedAt || '')}</p>
-    </div>
-  </div>
-</div>
 
 <div className="flex flex-wrap gap-3">
   {selectedResource?.driveUrl ? (
