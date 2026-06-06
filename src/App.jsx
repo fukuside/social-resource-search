@@ -560,9 +560,10 @@ syncEditForm(refreshed.item);
               </div>
 
               {res.memo && (
-                <p className="mt-3 line-clamp-2 rounded-2xl bg-white px-3 py-2 text-sm text-slate-500 ring-1 ring-slate-200">
-                  最新メモ: {res.memo}
-                </p>
+                <div className="mt-3 rounded-2xl bg-white px-3 py-2 text-xs leading-relaxed text-slate-600 ring-1 ring-slate-200">
+                  <span className="font-black text-slate-500">最新メモ：</span>
+                  <span className="whitespace-pre-wrap break-words">{res.memo}</span>
+                </div>
               )}
             </button>
           ))}
