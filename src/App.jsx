@@ -18,7 +18,7 @@ import { searchResources,
   updateResource,
   saveMemo,
   deleteMemoLog, } from './api';
-import './index.css';
+import './App.css';
 
 const REGIONS = [
   'すべて',
