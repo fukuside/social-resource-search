@@ -54,7 +54,23 @@ const SERVICE_TYPES = [
   '自立訓練',
   '訪問看護',
   '医療',
-  'その他',
+];
+
+
+const CONSULTATION_TYPES = [
+  'すべて',
+  '権利擁護',
+  '医療・保険',
+  'お金',
+  '住まい',
+  '就労',
+  '学校・教育・保育',
+  '居場所',
+  'ボランティア',
+  '更生保護・触法関係',
+  '他害行為のある人の相談',
+  '当事者の悩み',
+  '未分類',
 ];
 
 const DEFAULT_SUPPORT_FLAG_OPTIONS = [
@@ -121,6 +137,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRegions, setSelectedRegions] = useState([]);
   const [selectedType, setSelectedType] = useState('すべて');
+  const [selectedConsultationType, setSelectedConsultationType] = useState('すべて');
   const [onlyUnclassified, setOnlyUnclassified] = useState(false);
   const [includeDeleted, setIncludeDeleted] = useState(false);
 
@@ -153,7 +170,29 @@ export default function App() {
         onlyUnclassified,
         includeDeleted,
       });
-      setResources(data.results || []);
+
+      const results = data.results || [];
+
+      const filteredResults =
+        selectedConsultationType === 'すべて'
+          ? results
+          : results.filter((item) => {
+              const targetText = [
+                item.tags,
+                item.keywords,
+                item.memo,
+                item.supportFlags,
+                item.supportNotes,
+                item.businessName,
+                item.fileName,
+              ]
+                .filter(Boolean)
+                .join(' ');
+
+              return targetText.includes(selectedConsultationType);
+            });
+
+      setResources(filteredResults);
     } catch (err) {
       setError(err.message || '一覧取得に失敗しました');
     } finally {
@@ -177,6 +216,7 @@ const handleReset = () => {
   setMemo('');
   setError('');
   setIncludeDeleted(false);
+  setSelectedConsultationType('すべて');
 };
 
   const syncEditForm = (detail) => {
@@ -216,6 +256,25 @@ const handleReset = () => {
 
   setEditTags(nextTags.join(','));
 };
+
+
+const selectConsultationTag = (tag) => {
+  const currentTags = String(editTags || '')
+    .split(',')
+    .map(t => t.trim())
+    .filter(Boolean);
+
+  const otherTags = currentTags.filter(t => !CONSULTATION_TAGS.includes(t));
+  const nextTags = tag ? [...otherTags, tag] : otherTags;
+
+  setEditTags(nextTags.join(','));
+};
+
+const currentConsultationTag = (tags) =>
+  String(tags || '')
+    .split(',')
+    .map(t => t.trim())
+    .find(t => CONSULTATION_TAGS.includes(t)) || '';
 
 const toggleSupportFlag = (flag) => {
   const currentFlags = String(editSupportFlags || '')
@@ -468,6 +527,30 @@ syncEditForm(refreshed.item);
               ))}
             </div>
           </div>
+
+
+          <div>
+            <p className="mb-2 text-sm font-bold text-slate-500">相談別</p>
+            <div className="flex flex-wrap gap-2">
+              {CONSULTATION_TYPES.map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setSelectedConsultationType(type)}
+                  className={`rounded-2xl px-3 py-2 text-sm font-bold ${
+                    selectedConsultationType === type
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-slate-100 text-slate-600'
+                  }`}
+                >
+                  {type === 'すべて' ? 'すべて' : selectedConsultationType === type ? `✓ ${type}` : type}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-slate-400">
+              相談別は「基本情報の編集」で登録した分類から絞り込みます
+            </p>
+          </div>
         </div>
 
         <label className="flex items-center gap-2 text-sm font-bold text-red-600">
@@ -560,6 +643,14 @@ syncEditForm(refreshed.item);
                     <p className="mt-1 text-xs font-bold text-red-500">
                       削除日：{new Date(res.deletedAt).toLocaleString('ja-JP')}
                     </p>
+                  )}
+
+                  {currentConsultationTag(res.tags) && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-bold text-purple-800 shadow-sm ring-1 ring-purple-200">
+                        相談別：{currentConsultationTag(res.tags)}
+                      </span>
+                    </div>
                   )}
 
                   {(parseCommaValues(res.supportFlags).length > 0 || parseSupportNotes(res.supportNotes).length > 0) && (
@@ -716,6 +807,40 @@ syncEditForm(refreshed.item);
                         rows={3}
                         className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-500"
                       />
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-bold text-slate-600">相談別</label>
+                      <div className="mb-3 flex flex-wrap gap-2">
+                        {CONSULTATION_TAGS.map((tag) => {
+                          const isActive = currentConsultationTag(editTags) === tag;
+
+                          return (
+                            <button
+                              key={tag}
+                              type="button"
+                              onClick={() => selectConsultationTag(isActive ? '' : tag)}
+                              className={`rounded-2xl px-3 py-2 text-sm font-bold ${
+                                isActive
+                                  ? 'bg-purple-600 text-white'
+                                  : 'bg-slate-100 text-slate-600'
+                              }`}
+                            >
+                              {isActive ? `✓ ${tag}` : tag}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <input
+                        value={editTags}
+                        onChange={(e) => setEditTags(e.target.value)}
+                        placeholder="相談別などをカンマ区切りで保存"
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-500"
+                      />
+                      <p className="mt-1 text-xs text-slate-400">
+                        相談別は tags 列に保存します。既存のタグは消さずに残します。
+                      </p>
                     </div>
 
                     <div>
