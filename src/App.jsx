@@ -96,6 +96,8 @@ const SUPPORT_OPTIONS_BY_TYPE = {
     'ST',
     'PT',
     'OT',
+    '精神科',
+    '小児',
   ],
 };
 
