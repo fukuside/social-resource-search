@@ -57,15 +57,50 @@ const SERVICE_TYPES = [
   'その他',
 ];
 
-const SUPPORT_FLAG_OPTIONS = [
+const DEFAULT_SUPPORT_FLAG_OPTIONS = [
   '送迎あり',
   '医療的ケア対応',
   '強度行動障害対応',
-  '重度訪問介護',
   '重心対応',
-  '行動援護',
-  '同行援護',
 ];
+
+const SUPPORT_OPTIONS_BY_TYPE = {
+  放課後等デイサービス: [
+    '送迎あり',
+    '医療的ケア対応',
+    '重心対応',
+    '強度行動障害対応',
+  ],
+  児童発達: [
+    '送迎あり',
+    '医療的ケア対応',
+    '重心対応',
+    '強度行動障害対応',
+  ],
+  グループホーム: [
+    '夜間支援',
+    '医療連携',
+    '男性',
+    '女性',
+    '空室あり',
+  ],
+  就労継続支援B型: [
+    '昼食提供',
+    '送迎あり',
+    '工賃公開',
+  ],
+  訪問看護: [
+    '24h体制',
+    '介護',
+    '障がい',
+    'ST',
+    'PT',
+    'OT',
+  ],
+};
+
+const getSupportFlagOptionsByType = (serviceType) =>
+  SUPPORT_OPTIONS_BY_TYPE[serviceType] || DEFAULT_SUPPORT_FLAG_OPTIONS;
 
 const parseCommaValues = (value) =>
   String(value || '')
@@ -648,11 +683,18 @@ syncEditForm(refreshed.item);
 
                     <div>
                       <label className="mb-1 block text-sm font-bold text-slate-600">サービス種別</label>
-                      <input
+                      <select
                         value={editServiceType}
                         onChange={(e) => setEditServiceType(e.target.value)}
-                        className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-500"
-                      />
+                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-blue-500"
+                      >
+                        <option value="">未分類</option>
+                        {SERVICE_TYPES.filter((type) => type !== 'すべて').map((type) => (
+                          <option key={type} value={type}>
+                            {type}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
                     <div>
@@ -677,8 +719,12 @@ syncEditForm(refreshed.item);
                     <div>
                       <label className="mb-2 block text-sm font-bold text-slate-600">必須情報</label>
                       
+                      <p className="mb-2 text-xs font-bold text-slate-400">
+                        {editServiceType || '未分類'} 用の選択肢を表示中
+                      </p>
+
                       <div className="mb-3 flex flex-wrap gap-2">
-                        {SUPPORT_FLAG_OPTIONS.map((flag) => {
+                        {getSupportFlagOptionsByType(editServiceType).map((flag) => {
                           const selectedFlags = String(editSupportFlags || '')
                           .split(',')
                           .map(v => v.trim())
@@ -706,7 +752,7 @@ syncEditForm(refreshed.item);
                             <input
                             value={editSupportFlags}
                             onChange={(e) => setEditSupportFlags(e.target.value)}
-                            placeholder="例: 送迎あり,医療的ケア対応"
+                            placeholder="例: 送迎あり,医療的ケア対応 ※カンマ区切りで追加可"
                             className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-500"
                             />
                             <p className="mt-1 text-xs text-slate-400">カンマ区切りで手入力もできます</p>
