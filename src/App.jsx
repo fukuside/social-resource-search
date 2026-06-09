@@ -55,23 +55,27 @@ const SERVICE_TYPES = [
   '自立訓練',
   '訪問看護',
   '医療',
+  '相談',
 ];
 
-
-const CONSULTATION_TYPES = [
-  'すべて',
+const CONSULTATION_TAGS = [
   '権利擁護',
   '医療・保険',
   'お金',
-  '住まい（訪問美理容なども含む）',
+  '住まい',
   '仕事',
-  '学校・教育・保育',
+  '教育',
   '居場所',
   'ボランティア',
-  '更生保護・触法関係',
-  '他害行為のある人の相談',
-  '当事者の悩み',
+  '触法',
+  '他害関係',
+  '当事者',
   '未分類',
+];
+
+const CONSULTATION_TYPES = [
+  'すべて',
+  ...CONSULTATION_TAGS,
 ];
 
 const DEFAULT_SUPPORT_FLAG_OPTIONS = [
