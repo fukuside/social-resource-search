@@ -78,6 +78,17 @@ const CONSULTATION_TYPES = [
   ...CONSULTATION_TAGS,
 ];
 
+const CONSULTATION_LABELS = {
+  '住まい': '住まい（訪問美理容なども含む）',
+  '触法': '触法（更生保護・司法関係）',
+  '他害関係': '他害関係（他害行為のある人の相談）',
+  '当事者': '当事者（本人の悩み・ピア相談）',
+};
+
+const getConsultationLabel = (value) => {
+  return CONSULTATION_LABELS[value] || value;
+};
+
 const DEFAULT_SUPPORT_FLAG_OPTIONS = [
   '送迎あり',
   '医療的ケア対応',
@@ -563,7 +574,7 @@ syncEditForm(refreshed.item);
             <div className="flex flex-wrap gap-2">
               {CONSULTATION_TYPES.map((type) => (
                 <button
-                  key={type}
+                  key={getConsultationLabel(type)}
                   type="button"
                   onClick={() => setSelectedConsultationType(type)}
                   className={`rounded-2xl px-3 py-2 text-sm font-bold ${
@@ -572,7 +583,11 @@ syncEditForm(refreshed.item);
                       : 'bg-slate-100 text-slate-600'
                   }`}
                 >
-                  {type === 'すべて' ? 'すべて' : selectedConsultationType === type ? `✓ ${type}` : type}
+                  {type === 'すべて'
+                  ? 'すべて'
+                  : selectedConsultationType === type
+                  ? `✓ ${getConsultationLabel(type)}`
+                  : getConsultationLabel(type)}
                 </button>
               ))}
             </div>
@@ -677,7 +692,7 @@ syncEditForm(refreshed.item);
                   {currentConsultationTag(res.tags) && (
                     <div className="mt-3 flex flex-wrap gap-2">
                       <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-bold text-purple-800 shadow-sm ring-1 ring-purple-200">
-                        相談別：{currentConsultationTag(res.tags)}
+                        相談別：{getConsultationLabel(currentConsultationTag(res.tags))}
                       </span>
                     </div>
                   )}
@@ -855,7 +870,7 @@ syncEditForm(refreshed.item);
                                   : 'bg-slate-100 text-slate-600'
                               }`}
                             >
-                              {isActive ? `✓ ${tag}` : tag}
+                              {isActive ? `✓ ${getConsultationLabel(tag)}` : getConsultationLabel(tag)}
                             </button>
                           );
                         })}
