@@ -58,6 +58,7 @@ const SERVICE_TYPES = [
   '自立訓練',
   '訪問看護',
   '医療',
+  '介護タクシー',
   '相談',
 ];
 
@@ -158,6 +159,12 @@ const SUPPORT_OPTIONS_BY_TYPE = {
     '医療的ケア対応',
     '重心対応',
   ],
+  介護タクシー: [
+  '車椅子対応',
+  'ストレッチャー対応',
+  '福祉輸送',
+  '長距離対応'
+],
 };
 
 const getSupportFlagOptionsByType = (serviceType) =>
