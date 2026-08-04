@@ -33,29 +33,48 @@ export async function getResourceDetail(fileId) {
 }
 
 export async function updateResource(payload) {
-  const res = await fetch(GAS_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'text/plain;charset=utf-8',
-    },
-    body: JSON.stringify({
-      action: 'updateResource',
-      ...payload,
-    }),
+  const url = new URL(GAS_URL);
+
+  url.searchParams.set('action', 'updateResource');
+
+  Object.entries(payload || {}).forEach(([key, value]) => {
+    if (value === undefined || value === null) {
+      url.searchParams.set(key, '');
+    } else {
+      url.searchParams.set(key, String(value));
+    }
+  });
+
+  const res = await fetch(url.toString(), {
+    method: 'GET',
+    cache: 'no-store',
   });
 
   const text = await res.text();
 
-console.log("STATUS", res.status);
-console.log("BODY", text);
+  console.log('UPDATE STATUS', res.status);
+  console.log('UPDATE BODY', text);
 
-if (!res.ok) {
-  throw new Error(text);
+  if (!res.ok) {
+    throw new Error(`情報更新に失敗しました（HTTP ${res.status}）`);
+  }
+
+  let data;
+
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(
+      `GASからJSON以外の応答が返りました。\n\n${text}`
+    );
+  }
+
+  if (!data.ok) {
+    throw new Error(data.error || '情報更新に失敗しました');
+  }
+
+  return data;
 }
-
-return JSON.parse(text);
-}
-
 export async function saveMemo(fileId, memo, createdBy = 'manual') {
   const res = await fetch(GAS_URL, {
     method: 'POST',
