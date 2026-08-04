@@ -53,7 +53,7 @@ const SERVICE_TYPES = [
   '入所施設',
   '就労継続支援A型',
   '就労継続支援B型',
-  '就労移行',
+  '就労移行支援',
   '就労選択支援',
   '自立訓練',
   '訪問看護',
@@ -199,7 +199,10 @@ export default function App() {
   const [editServiceType, setEditServiceType] = useState('');
   const [editBusinessName, setEditBusinessName] = useState('');
   const [editKeywords, setEditKeywords] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editAddress, setEditAddress] = useState('');
   const [editTags, setEditTags] = useState('');
+  const [isAdminMode, setIsAdminMode] = useState(true);
 
   const [loading, setLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -217,30 +220,17 @@ export default function App() {
         q: searchQuery,
         area: selectedRegions.join(','),
         serviceType: selectedType,
+        consultationType: selectedConsultationType,
         onlyUnclassified,
         includeDeleted,
       });
 
       const results = data.results || [];
-
-      const filteredResults =
-        selectedConsultationType === 'すべて'
-          ? results
-          : results.filter((item) => {
-              const targetText = [
-                item.tags,
-                item.keywords,
-                item.memo,
-                item.supportFlags,
-                item.supportNotes,
-                item.businessName,
-                item.fileName,
-              ]
-                .filter(Boolean)
-                .join(' ');
-
-              return targetText.includes(selectedConsultationType);
-            });
+      const filteredResults = selectedConsultationType === 'すべて'
+        ? results
+        : results.filter((item) =>
+            parseCommaValues(item.tags).includes(selectedConsultationType)
+          );
 
       setResources(filteredResults);
     } catch (err) {
@@ -273,7 +263,9 @@ const handleReset = () => {
   setEditArea(detail.area || '');
   setEditServiceType(detail.serviceType || '');
   setEditBusinessName(detail.businessName || '');
-  setEditKeywords(detail.keywords || '');
+  setEditKeywords(detail.searchKeywords || '');
+  setEditPhone(detail.phone || '');
+  setEditAddress(detail.address || '');
   setEditTags(detail.tags || '');
   setEditSupportFlags(detail.supportFlags || '');
 
@@ -342,10 +334,11 @@ const toggleSupportFlag = (flag) => {
 };
 
 const buildMapUrl = (resource) => {
-  const query = [resource?.businessName, resource?.area]
-    .filter(Boolean)
-    .join(' ')
-    .trim();
+  const query = String(resource?.address || '').trim() ||
+    [resource?.businessName, resource?.area]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
 
   if (!query) return '';
 
@@ -421,6 +414,18 @@ syncEditForm(refreshed.item);
   const handleSaveEdit = async () => {
     if (!selectedResource?.fileId) return;
 
+    const middleName = editServiceType === '相談'
+      ? currentConsultationTag(editTags) || '相談'
+      : editServiceType;
+    const nextFileName = [editArea, middleName, editBusinessName]
+      .filter(Boolean)
+      .join('_') + '.pdf';
+
+    const confirmed = window.confirm(
+      `基本情報を保存します。\nGoogle Drive上のPDF名も次の名前に変更されます。\n\n${nextFileName}`
+    );
+    if (!confirmed) return;
+
     try {
       setSavingEdit(true);
       setError('');
@@ -430,7 +435,9 @@ syncEditForm(refreshed.item);
   area: editArea,
   serviceType: editServiceType,
   businessName: editBusinessName,
-  keywords: editKeywords,
+  searchKeywords: editKeywords,
+  phone: editPhone,
+  address: editAddress,
   tags: editTags,
   supportFlags: editSupportFlags,
   supportNotes: editSupportNotes
@@ -499,6 +506,19 @@ syncEditForm(refreshed.item);
         使い方マニュアル
       </a>
     
+      <button
+        type="button"
+        onClick={() => setIsAdminMode((prev) => !prev)}
+        className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-bold shadow-md transition ${
+          isAdminMode
+            ? 'bg-amber-500 text-white hover:bg-amber-600'
+            : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50'
+        }`}
+      >
+        <Edit3 className="h-4 w-4" />
+        {isAdminMode ? '管理モード' : '利用モード'}
+      </button>
+
       <button
         onClick={handleReset}
         className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2 text-sm font-bold text-white"
@@ -751,6 +771,12 @@ syncEditForm(refreshed.item);
                 <FileText className="h-5 w-5 shrink-0 text-slate-400" />
               </div>
 
+              {res.phone && (
+                <div className="mt-3 rounded-2xl bg-sky-50 px-3 py-2 text-sm font-bold text-sky-800 ring-1 ring-sky-200">
+                  電話：{res.phone}
+                </div>
+              )}
+
               {res.memo && (
                 <div className="mt-3 rounded-2xl bg-white px-3 py-2 text-xs leading-relaxed text-slate-600 ring-1 ring-slate-200">
                   <span className="font-black text-slate-500">最新メモ：</span>
@@ -822,6 +848,18 @@ syncEditForm(refreshed.item);
   )}
 </div>
 
+                {(selectedResource.phone || selectedResource.address) && (
+                  <div className="rounded-3xl border border-sky-200 bg-sky-50 p-4 text-sm">
+                    {selectedResource.phone && (
+                      <p className="font-bold text-sky-900">電話：{selectedResource.phone}</p>
+                    )}
+                    {selectedResource.address && (
+                      <p className="mt-1 text-sky-800">住所：{selectedResource.address}</p>
+                    )}
+                  </div>
+                )}
+
+                {isAdminMode && (
                 <div className="rounded-3xl border border-slate-200 p-4">
                   <div className="mb-3 flex items-center gap-2">
                     <Edit3 className="h-4 w-4 text-slate-500" />
@@ -829,6 +867,18 @@ syncEditForm(refreshed.item);
                   </div>
 
                   <div className="space-y-3">
+                    <div className="rounded-2xl bg-amber-50 p-3 ring-1 ring-amber-200">
+                      <p className="text-sm font-black text-amber-900">保存後のPDFファイル名</p>
+                      <p className="mt-1 break-all text-sm text-amber-800">
+                        {[editArea, editServiceType === '相談' ? currentConsultationTag(editTags) || '相談' : editServiceType, editBusinessName]
+                          .filter(Boolean)
+                          .join('_')}.pdf
+                      </p>
+                      <p className="mt-2 text-xs text-amber-700">
+                        保存するとGoogle Drive上のPDF名とスプレッドシートの分類が同時に更新されます。
+                      </p>
+                    </div>
+
                     <div>
                       <label className="mb-1 block text-sm font-bold text-slate-600">地域</label>
                       <input
@@ -864,11 +914,33 @@ syncEditForm(refreshed.item);
                     </div>
 
                     <div>
-                      <label className="mb-1 block text-sm font-bold text-slate-600">キーワード</label>
+                      <label className="mb-1 block text-sm font-bold text-slate-600">電話番号</label>
+                      <input
+                        value={editPhone}
+                        onChange={(e) => setEditPhone(e.target.value)}
+                        placeholder="例：06-1234-5678"
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-sm font-bold text-slate-600">住所</label>
+                      <input
+                        value={editAddress}
+                        onChange={(e) => setEditAddress(e.target.value)}
+                        placeholder="例：大阪府守口市○○1-2-3"
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-500"
+                      />
+                      <p className="mt-1 text-xs text-slate-400">入力がある場合、「地図で見る」は住所を優先します。</p>
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-sm font-bold text-slate-600">検索キーワード</label>
                       <textarea
                         value={editKeywords}
                         onChange={(e) => setEditKeywords(e.target.value)}
                         rows={3}
+                        placeholder="PDF名に含まれない検索語を入力"
                         className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-500"
                       />
                     </div>
@@ -980,7 +1052,9 @@ syncEditForm(refreshed.item);
                       </button>
                   </div>
                 </div>
+                )}
 
+                {isAdminMode && (
                 <div className="rounded-3xl border border-slate-200 p-4">
                   <div className="mb-3 flex items-center gap-2">
                     <History className="h-4 w-4 text-slate-500" />
@@ -1038,6 +1112,7 @@ syncEditForm(refreshed.item);
                     </div>
                   </div>
                 </div>
+                )}
               </div>
             )}
           </div>
