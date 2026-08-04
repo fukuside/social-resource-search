@@ -44,11 +44,16 @@ export async function updateResource(payload) {
     }),
   });
 
-  if (!res.ok) {
-    throw new Error('情報更新に失敗しました');
-  }
+  const text = await res.text();
 
-  return res.json();
+console.log("STATUS", res.status);
+console.log("BODY", text);
+
+if (!res.ok) {
+  throw new Error(text);
+}
+
+return JSON.parse(text);
 }
 
 export async function saveMemo(fileId, memo, createdBy = 'manual') {
