@@ -203,6 +203,7 @@ export default function App() {
   const [editAddress, setEditAddress] = useState('');
   const [editTags, setEditTags] = useState('');
   const [isAdminMode, setIsAdminMode] = useState(true);
+  const [renameDriveFile, setRenameDriveFile] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -268,6 +269,7 @@ const handleReset = () => {
   setEditAddress(detail.address || '');
   setEditTags(detail.tags || '');
   setEditSupportFlags(detail.supportFlags || '');
+  setRenameDriveFile(false);
 
   const notes = String(detail.supportNotes || '')
     .split('｜')
@@ -421,10 +423,16 @@ syncEditForm(refreshed.item);
       .filter(Boolean)
       .join('_') + '.pdf';
 
-    const confirmed = window.confirm(
-      `基本情報を保存します。\nGoogle Drive上のPDF名も次の名前に変更されます。\n\n${nextFileName}`
-    );
-    if (!confirmed) return;
+    if (renameDriveFile) {
+      if (!SERVICE_TYPES.includes(editServiceType) || editServiceType === 'すべて') {
+        setError('PDF名を変更する場合は、サービス種別を1つ選択してください。');
+        return;
+      }
+      const confirmed = window.confirm(
+        `Google Drive上のPDF名を次の名前に変更します。\n\n${nextFileName}\n\nよろしいですか？`
+      );
+      if (!confirmed) return;
+    }
 
     try {
       setSavingEdit(true);
@@ -438,6 +446,7 @@ syncEditForm(refreshed.item);
   searchKeywords: editKeywords,
   phone: editPhone,
   address: editAddress,
+  renameDriveFile,
   tags: editTags,
   supportFlags: editSupportFlags,
   supportNotes: editSupportNotes
@@ -868,15 +877,32 @@ syncEditForm(refreshed.item);
 
                   <div className="space-y-3">
                     <div className="rounded-2xl bg-amber-50 p-3 ring-1 ring-amber-200">
-                      <p className="text-sm font-black text-amber-900">保存後のPDFファイル名</p>
-                      <p className="mt-1 break-all text-sm text-amber-800">
-                        {[editArea, editServiceType === '相談' ? currentConsultationTag(editTags) || '相談' : editServiceType, editBusinessName]
-                          .filter(Boolean)
-                          .join('_')}.pdf
-                      </p>
-                      <p className="mt-2 text-xs text-amber-700">
-                        保存するとGoogle Drive上のPDF名とスプレッドシートの分類が同時に更新されます。
-                      </p>
+                      <label className="flex items-start gap-2 text-sm font-black text-amber-900">
+                        <input
+                          type="checkbox"
+                          checked={renameDriveFile}
+                          onChange={(e) => setRenameDriveFile(e.target.checked)}
+                          className="mt-1"
+                        />
+                        Google Drive上のPDF名も変更する
+                      </label>
+                      {renameDriveFile ? (
+                        <>
+                          <p className="mt-2 text-xs font-bold text-amber-800">変更後のPDFファイル名</p>
+                          <p className="mt-1 break-all text-sm text-amber-800">
+                            {[editArea, editServiceType === '相談' ? currentConsultationTag(editTags) || '相談' : editServiceType, editBusinessName]
+                              .filter(Boolean)
+                              .join('_')}.pdf
+                          </p>
+                          <p className="mt-2 text-xs text-amber-700">
+                            チェック時だけDriveのPDF名を変更します。サービス種別は1つ選択してください。
+                          </p>
+                        </>
+                      ) : (
+                        <p className="mt-2 text-xs text-amber-700">
+                          通常の保存ではPDF名を変えず、スプレッドシートの基本情報だけ更新します。
+                        </p>
+                      )}
                     </div>
 
                     <div>
