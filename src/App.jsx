@@ -488,6 +488,7 @@ const buildMapUrl = (resource) => {
       if (!result.ok) {
         throw new Error(result.error || 'メモ保存に失敗しました');
       }
+      setPublicUpdateRevision((revision) => revision + 1);
 
       const refreshed = await getResourceDetail(selectedResource.fileId, accessCode);
 setSelectedResource({
@@ -522,6 +523,7 @@ syncEditForm(refreshed.item);
   memoLogs: detail.memoLogs || [],
 });
     setTimelineEntries((entries) => entries.filter((entry) => entry.logId !== logId));
+    setPublicUpdateRevision((revision) => revision + 1);
   } catch (error) {
     alert(error.message || '削除に失敗しました');
   }
@@ -561,6 +563,7 @@ syncEditForm(refreshed.item);
   .filter(Boolean)
   .join('｜'),
 }, accessCode);
+      setPublicUpdateRevision((revision) => revision + 1);
 
       if (!result.ok) {
         throw new Error(result.error || '情報更新に失敗しました');
@@ -750,7 +753,10 @@ syncEditForm(refreshed.item);
                   </button>
                 </div>
                 <p className="text-sm text-slate-600">{[entry.area, entry.serviceType].filter(Boolean).join('／')}</p>
-                <p className="my-2 whitespace-pre-wrap break-words">{entry.memo}</p>
+                <p className="mt-2 text-xs font-bold text-slate-600">
+                  {{ memo: '更新メモ', support: '情報メモ', registered: 'PDF登録', replaced: 'PDF差し替え' }[entry.type]}
+                </p>
+                <p className="mb-2 whitespace-pre-wrap break-words">{entry.memo}</p>
                 <p className="text-sm">入力者：{memoAuthor(entry.createdBy)}</p>
               </li>
             ))}
@@ -1375,10 +1381,11 @@ syncEditForm(refreshed.item);
                       className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-500"
                       placeholder="例: 2026/04/09 電話番号修正、対象地域を追記"
                     />
+                    {staff && <p className="text-sm text-slate-600">保存した更新メモの本文は、公開画面の「最近の更新」に表示されます。</p>}
 
                     <button
                     onClick={handleSaveMemo}
-                    disabled={savingMemo}
+                    disabled={savingMemo || !memo.trim()}
                     className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-60"
                     >
                       <Save className="h-4 w-4" />

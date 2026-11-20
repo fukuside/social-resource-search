@@ -68,6 +68,21 @@ change('      // 削除済みPDFは検索結果から除外', '      if (item.de
 change('function searchResources(params) {', 'function searchResources(params, includeStaffMemos = true) {');
 change('  const memoLogMap = buildMemoLogMap();', '  const memoLogMap = includeStaffMemos ? buildMemoLogMap() : new Map();');
 change('        item.memo,', '        includeStaffMemos ? item.memo : "",');
+change('        item.supportNotes,', '        includeStaffMemos ? item.supportNotes : "",');
+change('      added++;\n    }', "      socialNavRecordActivity_('registered', fileId, '自動同期', String(fileId));\n      added++;\n    }");
+change('function syncNewDrivePdfsOnly() {', `function syncNewDrivePdfsOnly() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    return syncNewDrivePdfsOnlyLocked_();
+  } finally {
+    try { SpreadsheetApp.flush(); } finally { lock.releaseLock(); }
+  }
+}
+
+function syncNewDrivePdfsOnlyLocked_() {`);
+change('    added++;\n  }\n\n  SpreadsheetApp.flush();\n  return { ok: true, checked, added };',
+  "    socialNavRecordActivity_('registered', fileId, '自動同期', String(fileId));\n    added++;\n  }\n\n  SpreadsheetApp.flush();\n  return { ok: true, checked, added };");
 
 for (const [key, value] of [['SHEET_ID', testSheetId], ['FOLDER_ID', testFolderId]]) {
   if (!/^[A-Za-z0-9_-]{12,}$/.test(value)) throw new Error(key + ' の検証用IDを確認してください。');

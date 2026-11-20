@@ -214,6 +214,7 @@ function socialNavApprove_(queue, index, config, input, staff) {
     values[5] = '';
     range.setValues([values]);
   }
+  socialNavRecordActivity_('registered', fileId, staff.name, String(fileId), '', staff.publicDisplayName);
   row[2] = 'registered';
   row[5] = '';
   row[6] = new Date();

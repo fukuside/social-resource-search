@@ -3,7 +3,7 @@ function socialNavRead(request) {
   try {
     switch (params.action || 'search') {
       case 'ping':
-        return jsonOutput({ok: true, message: 'pong', version: 'public-updates-v1'});
+        return jsonOutput({ok: true, message: 'pong', version: 'public-memos-v1'});
       case 'publicUpdates':
         return jsonOutput(socialNavPublicUpdates_());
       case 'search': {
@@ -65,10 +65,18 @@ function socialNavWrite(request) {
           if (!resource.ok || socialNavDeleted_(resource.item)) {
             return jsonOutput({ok: false, error: '更新できる事業所が見つかりません。'});
           }
-          return jsonOutput(saveMemoLog(body.fileId, socialNavSheetText_(body.memo), staff.name));
+          const memo = String(body.memo || '').trim();
+          const result = saveMemoLog(body.fileId, socialNavSheetText_(memo), staff.name);
+          if (result.ok && result.logId) {
+            socialNavRecordActivity_('memo', body.fileId, staff.name, result.logId, '', staff.publicDisplayName, memo);
+          }
+          return jsonOutput(result);
         }
-        case 'deleteMemoLog':
-          return jsonOutput(deleteMemoLog(body.logId));
+        case 'deleteMemoLog': {
+          const result = deleteMemoLog(body.logId);
+          if (result.ok) socialNavHideUpdate_('memo:' + body.logId);
+          return jsonOutput(result);
+        }
         case 'intakeList':
           return jsonOutput(socialNavIntakeList_(body.offset));
         case 'intakeReread':
@@ -113,6 +121,10 @@ function socialNavWrite(request) {
           if (result.ok) {
             const row = socialNavResourceRow_(body.fileId);
             if (row) row.sheet.getRange(row.number, 20).setValue(true);
+            const previousNotes = new Set(String(resource.item.supportNotes || '').split('｜').map(note => note.trim()));
+            const additions = [...new Set(String(body.supportNotes || '').split('｜').map(note => note.trim()))]
+              .filter(note => note && !previousNotes.has(note));
+            if (additions.length) socialNavRecordActivity_('support', body.fileId, staff.name, '', additions.join('\n'), staff.publicDisplayName);
           }
           return jsonOutput(result);
         }
@@ -138,7 +150,10 @@ function socialNavStaff_(code) {
   if (!value) return null;
   const entry = JSON.parse(value);
   if (typeof entry.name !== 'string' || !entry.name.trim() || !['staff', 'admin'].includes(entry.role)) return null;
-  return {name: entry.name.trim(), role: entry.role};
+  const publicDisplayName = typeof entry.publicDisplayName === 'string'
+    ? entry.publicDisplayName.replace(/[\r\n]+/g, ' ').trim().slice(0, 40)
+    : '';
+  return {name: entry.name.trim(), role: entry.role, publicDisplayName};
 }
 
 function socialNavDeleted_(item) {
@@ -152,8 +167,6 @@ function socialNavSheetText_(value) {
 
 function socialNavTimeline_(cursor) {
   const logSheet = getMemoLogSheet();
-  const count = logSheet.getLastRow() - 1;
-  if (count <= 0) return {ok: true, entries: [], nextCursor: null};
 
   const resourceRows = getSheet().getDataRange().getValues();
   const resources = new Map(resourceRows.slice(1).map(row => [String(row[0]), rowToObject(resourceRows[0], row)]));
@@ -162,26 +175,39 @@ function socialNavTimeline_(cursor) {
   const boundary = cursor && Number.isFinite(cursor.time) && typeof cursor.logId === 'string' ? cursor : null;
   const page = [];
 
-  // Keep only the next page in memory. The cursor remains valid when a log is removed.
-  for (let row = count + 1; row >= 2; row -= 500) {
-    const first = Math.max(2, row - 499);
-    const batch = logSheet.getRange(first, 1, row - first + 1, 5).getValues();
-    for (const [id, fileId, memo, createdAt, createdBy] of batch) {
-      const resource = resources.get(String(fileId));
-      const time = new Date(createdAt).getTime();
-      if (!id || !resource || socialNavDeleted_(resource) || !Number.isFinite(time)) continue;
-      const logId = String(id);
-      if (boundary && compare({time, logId}, boundary) <= 0) continue;
-      const last = page[pageSize];
-      if (last && compare({time, logId}, last) >= 0) continue;
-      page.push({
-        type: 'memo', logId, fileId, memo, createdAt, createdBy, time,
-        businessName: resource.businessName, area: resource.area, serviceType: resource.serviceType,
-      });
-      page.sort(compare);
-      if (page.length > pageSize + 1) page.pop();
+  const collect = (source, width, convert) => {
+    if (!source) return;
+    for (let row = source.getLastRow(); row >= 2; row -= 500) {
+      const first = Math.max(2, row - 499);
+      const batch = source.getRange(first, 1, row - first + 1, width).getValues();
+      for (const values of batch) {
+        const entry = convert(values);
+        if (!entry) continue;
+        const {id, fileId, memo, createdAt, createdBy, type} = entry;
+        const resource = resources.get(String(fileId));
+        const time = new Date(createdAt).getTime();
+        if (!id || !resource || socialNavDeleted_(resource) || !Number.isFinite(time)) continue;
+        const logId = String(id);
+        if (boundary && compare({time, logId}, boundary) <= 0) continue;
+        const last = page[pageSize];
+        if (last && compare({time, logId}, last) >= 0) continue;
+        page.push({
+          type, logId, fileId, memo, createdAt, createdBy, time,
+          businessName: resource.businessName, area: resource.area, serviceType: resource.serviceType,
+        });
+        page.sort(compare);
+        if (page.length > pageSize + 1) page.pop();
+      }
     }
-  }
+  };
+  collect(logSheet, 5, ([id, fileId, memo, createdAt, createdBy]) =>
+    ({id, fileId, memo, createdAt, createdBy, type: 'memo'}));
+  const activitySheet = socialNavPublicUpdateSheet_(false);
+  collect(activitySheet, 8, ([id, fileId, message, , createdAt, createdBy, , staffMessage]) => {
+    const type = String(id).split(':')[0];
+    if (!['support', 'registered', 'replaced'].includes(type)) return null;
+    return {id, fileId, memo: staffMessage || message, createdAt, createdBy, type};
+  });
 
   const entries = page.slice(0, pageSize);
   const lastEntry = entries[entries.length - 1];
@@ -325,6 +351,7 @@ function socialNavResolveChange_(body, staff) {
     status = 'rejected';
   } else if (row[3] === 'replace' && body.resolution === 'replacementDone') {
     status = 'replaced';
+    socialNavRecordActivity_('replaced', row[1], staff.name, String(row[0]), '', staff.publicDisplayName);
   } else if (row[3] === 'delete' && ['search', 'drive'].includes(body.resolution)) {
     const result = socialNavChangeDeletion_({action:'deleteResource', fileId:row[1], mode:body.resolution});
     if (!result.ok) return result;
@@ -343,6 +370,7 @@ const SOCIAL_NAV_PUBLIC_UPDATE_HEADERS = [
 function socialNavPublicResource_(resource) {
   const publicResource = {...resource};
   delete publicResource.memo;
+  delete publicResource.supportNotes;
   return publicResource;
 }
 
@@ -359,6 +387,30 @@ function socialNavPublicUpdateSheet_(create) {
     throw new Error('公開更新シートのヘッダーが一致しません。');
   }
   return sheet;
+}
+
+const SOCIAL_NAV_ACTIVITY_TEXT = {
+  memo: '更新メモが追加されました。',
+  support: '情報メモが追加されました。',
+  registered: 'PDF資料が登録されました。',
+  replaced: 'PDF資料が差し替えられました。',
+};
+
+function socialNavRecordActivity_(type, fileId, actor, sourceId, staffMessage, publicDisplayName, publicMemo) {
+  const sheet = socialNavPublicUpdateSheet_(true);
+  const id = type + ':' + (sourceId || Utilities.getUuid());
+  const count = sheet.getLastRow() - 1;
+  if (sourceId && count > 0 && sheet.getRange(2, 1, count, 1).createTextFinder(id)
+      .matchEntireCell(true).matchCase(true).findNext()) return;
+  const privateColumn = sheet.getRange(1, 8);
+  const existingHeader = privateColumn.getValue();
+  if (existingHeader && existingHeader !== 'staffMessage') throw Error('公開更新シートの追加列が使用されています。');
+  if (!existingHeader) privateColumn.setValue('staffMessage');
+  sheet.appendRow([
+    id, String(fileId), socialNavSheetText_(publicMemo || SOCIAL_NAV_ACTIVITY_TEXT[type]),
+    socialNavSheetText_(publicDisplayName || '資料担当'), new Date(),
+    socialNavSheetText_(actor), false, socialNavSheetText_(staffMessage),
+  ]);
 }
 
 function socialNavPublicUpdates_() {

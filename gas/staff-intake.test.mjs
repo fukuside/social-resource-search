@@ -26,6 +26,7 @@ const publicSheet = () => ({
   appendRow: (row) => publicRows.push(Array.from(row)),
   getRange: (row, column, height) => ({
     getValues: () => publicRows.slice(row - 1, row - 1 + height),
+    getValue: () => publicRows[row - 1]?.[column - 1],
     setValue: (value) => { publicRows[row - 1][column - 1] = value; },
     createTextFinder: (id) => ({
       matchEntireCell() { return this; },
@@ -118,11 +119,11 @@ const context = createContext({
     getRange: (first, col, length) => ({ getValues: () => logs.slice(first - 2, first - 2 + length) }),
   }),
   rowToObject: (headers, row) => Object.fromEntries(headers.map((key, i) => [key, row[i]])),
-  getResource: () => ({ ok: true, item: { isDeleted: status[0], memo: '内部メモ', businessName: '操作例' }, memoLogs: logs }),
+  getResource: () => ({ ok: true, item: { isDeleted: status[0], memo: '内部メモ', supportNotes: '以前の情報メモ', businessName: '操作例' }, memoLogs: logs }),
   searchResources: (params, includeStaffMemos = true) => ({
     ok: true, results: params.q && !includeStaffMemos ? [] : [{ fileId, memo: '内部メモ' }],
   }),
-  saveMemoLog: (id, memo, name) => { memoAuthor = name; return { ok: true }; },
+  saveMemoLog: (id, memo, name) => { memoAuthor = name; return { ok: true, logId: 'memo-' + (++generatedId) }; },
   updateResource: (body) => { savedResource = body; return { ok: true }; },
   buildManagedFileName: (area, service, name) => [area, service, name].join('_') + '.pdf',
   ensureHeader() {},
@@ -209,6 +210,18 @@ assert.equal(request('resolveResourceChangeRequest', adminCode, { requestId: rep
 assert.equal(request('resolveResourceChangeRequest', adminCode, { requestId: replacement.requestId, resolution: 'replacementDone' }).ok, true);
 assert.equal(request('listResourceChangeRequests', adminCode).total, 0);
 assert.equal(status[0], false);
+assert.equal(read('detail', { fileId }).item.supportNotes, undefined);
+assert.equal(request('updateResource', staffCode, { fileId, supportNotes: '以前の情報メモ｜内部の新しい情報メモ' }).ok, true);
+context.socialNavRecordActivity_('registered', fileId, '自動同期', fileId);
+context.socialNavRecordActivity_('registered', fileId, '自動同期', fileId);
+const automatic = read('publicUpdates').entries;
+for (const label of ['職員のメモ', '情報メモが追加されました。', 'PDF資料が登録されました。', 'PDF資料が差し替えられました。']) {
+  assert(automatic.some(entry => entry.message === label));
+}
+assert(!JSON.stringify(automatic).includes('内部の新しい情報メモ'));
+assert(!JSON.stringify(automatic).includes('閲覧担当'));
+assert.equal(publicRows.filter(row => row[0] === 'registered:' + fileId).length, 1);
+assert(request('timeline', staffCode).entries.some(entry => entry.type === 'support' && entry.memo === '内部の新しい情報メモ'));
 
 assert.throws(() => context.socialNavReadPdf_({}, { enabled: false }), /無効/);
 assert.equal(responseCount, 0);
