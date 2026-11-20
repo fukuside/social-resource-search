@@ -47,7 +47,7 @@ export default function GoogleStaffLogin({ onCredential, busy, error }) {
         if (!controller.signal.aborted) setSetupError(failure.message);
       }
     }
-    setup();
+    if (window.location.hostname === 'social-resource-search.vercel.app') setup();
     return () => {
       controller.abort();
       button.replaceChildren();
@@ -56,6 +56,11 @@ export default function GoogleStaffLogin({ onCredential, busy, error }) {
 
   return (
     <div className="space-y-2" aria-busy={busy}>
+      {window.location.hostname !== 'social-resource-search.vercel.app' && (
+        <a className="text-blue-700 underline" href="https://social-resource-search.vercel.app/">
+          正式な公開URLを開いて管理者ログイン
+        </a>
+      )}
       <div id="staff-google-login" ref={target} tabIndex={-1} />
       {busy && <p role="status">アカウントを確認中…</p>}
       {(error || setupError) && <p role="alert" className="whitespace-pre-line break-all text-sm text-red-700">{error || setupError}</p>}

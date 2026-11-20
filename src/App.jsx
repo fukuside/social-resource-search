@@ -492,7 +492,7 @@ const buildMapUrl = (resource) => {
       }
       setPublicUpdateRevision((revision) => revision + 1);
 
-      const refreshed = await getResourceDetail(selectedResource.fileId, accessCode);
+      const refreshed = await getResourceDetail(selectedResource.fileId, accessCode || undefined);
 setSelectedResource({
   ...refreshed.item,
   memoLogs: refreshed.memoLogs || [],
@@ -571,7 +571,7 @@ syncEditForm(refreshed.item);
         throw new Error(result.error || '情報更新に失敗しました');
       }
 
-      const refreshed = await getResourceDetail(selectedResource.fileId, accessCode);
+      const refreshed = await getResourceDetail(selectedResource.fileId, accessCode || undefined);
 setSelectedResource({
   ...refreshed.item,
   memoLogs: refreshed.memoLogs || [],
@@ -594,8 +594,6 @@ syncEditForm(refreshed.item);
   const openStaffLogin = () => {
     if (staff) {
       signOut();
-    } else if (selectedResource && !resourceDeleted) {
-      document.getElementById('staff-google-login')?.focus();
     } else {
       setShowStaffForm((visible) => !visible);
     }
@@ -656,7 +654,7 @@ syncEditForm(refreshed.item);
         disabled={staffBusy || savingMemo || savingEdit}
         className="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-bold"
       >
-        {staff ? staff.name + '・ログアウト' : 'Googleで編集ログイン'}
+        {staff ? staff.name + '・ログアウト' : '管理者ログイン'}
       </button>
       {staff?.role === 'admin' && <button
         type="button"
@@ -710,7 +708,7 @@ syncEditForm(refreshed.item);
           onClose={() => setShowIntake(false)} onRegistered={() => hasSearched && loadResources()} />
       )}
 
-      {showStaffForm && !staff && (!selectedResource || resourceDeleted) && (
+      {showStaffForm && !staff && (
         <div className="mx-auto max-w-7xl px-4 py-3">{staffLoginForm}</div>
       )}
 
@@ -1094,10 +1092,6 @@ syncEditForm(refreshed.item);
                       <a className="underline" href="#resource-support">送迎・医療的ケア</a>
                       <a className="underline" href="#resource-memo">更新メモ</a>
                     </nav>
-                    {!staff && <>
-                      <p className="text-sm text-slate-700">基本情報の編集やメモの保存には、許可されたGoogleアカウントでログインしてください。</p>
-                      {staffLoginForm}
-                    </>}
                   </div>
                 )}
 
@@ -1123,7 +1117,7 @@ syncEditForm(refreshed.item);
                   </div>
                 )}
 
-                {staff && !resourceDeleted && (
+                {!resourceDeleted && (
                   <ResourceChangeForm key={selectedResource.fileId} fileId={selectedResource.fileId} accessCode={accessCode} />
                 )}
 
@@ -1139,7 +1133,7 @@ syncEditForm(refreshed.item);
                     <h4 className="font-black">基本情報の編集</h4>
                   </div>
 
-                  <fieldset disabled={!staff} className="min-w-0 space-y-3 disabled:opacity-75">
+                  <fieldset className="min-w-0 space-y-3">
                     {isAdminMode && <div className="rounded-2xl bg-amber-50 p-3 ring-1 ring-amber-200">
                       <label className="flex items-start gap-2 text-sm font-black text-amber-900">
                         <input
@@ -1318,7 +1312,7 @@ syncEditForm(refreshed.item);
                             </div>
                             <div className="mt-4">
   <label className="mb-2 block text-sm font-bold text-slate-600">
-    必須情報メモ
+    {staff ? '必須情報メモ' : '情報メモを追加'}
   </label>
 
   <div className="space-y-2">
@@ -1357,16 +1351,17 @@ syncEditForm(refreshed.item);
                     <h4 className="font-black">更新メモ</h4>
                   </div>
 
-                  <fieldset disabled={!staff} className="min-w-0 space-y-3 disabled:opacity-75">
+                  <fieldset className="min-w-0 space-y-3">
                     <textarea
                       aria-label="更新メモを入力"
+                      maxLength={2000}
                       value={memo}
                       onChange={(e) => setMemo(e.target.value)}
                       rows={5}
                       className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-500"
                       placeholder="例: 2026/04/09 電話番号修正、対象地域を追記"
                     />
-                    {staff && <p className="text-sm text-slate-600">保存した更新メモの本文は、公開画面の「最近の更新」に表示されます。</p>}
+                    <p className="text-sm text-slate-600">保存した更新メモの本文は、公開画面の「最近の更新」に表示されます。</p>
 
                     <button
                     onClick={handleSaveMemo}

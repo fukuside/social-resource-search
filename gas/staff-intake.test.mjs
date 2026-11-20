@@ -131,8 +131,8 @@ const context = createContext({
   searchResources: (params, includeStaffMemos = true) => ({
     ok: true, results: params.q && !includeStaffMemos ? [] : [{ fileId, memo: '内部メモ' }],
   }),
-  saveMemoLog: (id, memo, name) => { memoAuthor = name; return { ok: true, logId: 'memo-' + (++generatedId) }; },
-  updateResource: (body) => { savedResource = body; return { ok: true }; },
+  saveMemoLog: (id, memo, name) => { memoAuthor = name; return { ok: true, logId: 'memo-' + (++generatedId), item: { memoLogs: logs } }; },
+  updateResource: (body) => { savedResource = body; return { ok: true, item: { memoLogs: logs } }; },
   buildManagedFileName: (area, service, name) => [area, service, name].join('_') + '.pdf',
   ensureHeader() {},
   jsonOutput: (value) => value,
@@ -140,6 +140,7 @@ const context = createContext({
 for (const filename of ['Classification.gs', 'SocialNavStaff.gs', 'SocialNavIntake.gs']) {
   runInContext(readFileSync(new URL('./' + filename, import.meta.url), 'utf8'), context, { filename });
 }
+const publicWrite = (action, extras = {}) => write({ action, ...extras });
 const write = (body) => context.socialNavWrite({ postData: { contents: JSON.stringify(body) } });
 const request = (action, email, extras = {}, googleHosted = true) => {
   const signed = JSON.stringify({ email, subject, googleHosted, issuedAt: Date.now(), payload: { action, ...extras } });
@@ -156,7 +157,7 @@ assert.equal(enrollment.ok, false);
 assert(enrollment.error.endsWith(subject));
 assert.equal(request('saveMemo', externalEmail, { fileId, memo: '拒否' }, false).ok, false);
 staffEntries.set('staff.google.' + externalEmail, JSON.stringify({name: '確認済み', role: 'staff', subject}));
-assert.equal(request('staff', externalEmail, {}, false).staff.name, '確認済み');
+assert.equal(request('staff', externalEmail, {}, false).ok, false);
 staffEntries.set('staff.google.' + externalEmail, JSON.stringify({role: 'staff', subject: '1'.repeat(64)}));
 assert.equal(request('staff', externalEmail, {}, false).ok, false);
 assert.equal(context.socialNavRead({ parameter: { action: 'sync' } }).ok, false);
@@ -167,19 +168,19 @@ assert.equal(read('detail', { fileId }).item.memo, undefined);
 assert.equal(read('detail', { fileId }).memoLogs, undefined);
 assert.equal(read('search').results[0].memo, undefined);
 assert.equal(read('search', { q: '内部メモ' }).results.length, 0);
-assert.equal(request('staffSearch', staffEmail, { q: '内部メモ' }).results[0].memo, '内部メモ');
-assert.equal(request('staffDetail', staffEmail, { fileId }).item.memo, '内部メモ');
+assert.equal(request('staffSearch', adminEmail, { q: '内部メモ' }).results[0].memo, '内部メモ');
+assert.equal(request('staffDetail', adminEmail, { fileId }).item.memo, '内部メモ');
 assert.equal(read('publicUpdates').entries.length, 0);
 assert.equal(publicRows, undefined);
 assert.equal(request('publishPublicUpdate', 'wrong', { fileId, message: '新版です', displayName: '担当窓口' }).ok, false);
-assert.equal(request('publishPublicUpdate', staffEmail, { fileId, message: '新版です' }).ok, false);
-assert.equal(request('publishPublicUpdate', staffEmail, { fileId, message: '新版です', displayName: '担当窓口' }).ok, true);
-assert.equal(request('publishPublicUpdate', staffEmail, { fileId, message: '新版です', displayName: '担当窓口' }).ok, true);
+assert.equal(request('publishPublicUpdate', adminEmail, { fileId, message: '新版です' }).ok, false);
+assert.equal(request('publishPublicUpdate', adminEmail, { fileId, message: '新版です', displayName: '担当窓口' }).ok, true);
+assert.equal(request('publishPublicUpdate', adminEmail, { fileId, message: '新版です', displayName: '担当窓口' }).ok, true);
 const feed = read('publicUpdates').entries;
 assert.equal(feed.length, 1);
 assert.equal(feed[0].displayName, '担当窓口');
 assert.equal(feed[0].publishedBy, undefined);
-assert.equal(publicRows[1][5], '閲覧担当');
+assert.equal(publicRows[1][5], '更新担当');
 assert.equal(request('hidePublicUpdate', staffEmail, { updateId: feed[0].updateId }).ok, false);
 assert.equal(request('hidePublicUpdate', adminEmail, { updateId: feed[0].updateId }).ok, true);
 assert.equal(read('publicUpdates').entries.length, 0);
@@ -189,15 +190,15 @@ assert.equal(rangeWrites, 0);
 parentId = 'search-folder';
 assert.equal(request('saveMemo', adminEmail, { fileId, memo: 'メモ', createdBy: '偽名' }).ok, true);
 assert.equal(memoAuthor, '更新担当');
-const latest = request('timeline', staffEmail);
+const latest = request('timeline', adminEmail);
 assert.equal(latest.entries.length, 20);
 assert.equal(latest.entries[0].logId, 'log-22');
 logs.splice(logs.findIndex((row) => row[0] === latest.nextCursor.logId), 1);
-assert.equal(request('timeline', staffEmail, { cursor: latest.nextCursor }).entries.length, 3);
+assert.equal(request('timeline', adminEmail, { cursor: latest.nextCursor }).entries.length, 3);
 assert.equal(request('deleteResource', adminEmail, { fileId, mode: 'search' }).ok, true);
 assert.equal(isTrashed, false);
 assert.equal(status[5], 'search');
-assert.equal(request('timeline', staffEmail).entries.length, 0);
+assert.equal(request('timeline', adminEmail).entries.length, 0);
 assert.equal(request('restoreResource', adminEmail, { fileId }).ok, true);
 assert.equal(status[0], false);
 assert.equal(request('deleteResource', adminEmail, { fileId, mode: 'drive' }).ok, true);
@@ -211,23 +212,31 @@ assert.equal(request('restoreResource', adminEmail, { fileId }).ok, true);
 assert.equal(isTrashed, false);
 assert.equal(status[0], false);
 
-assert.equal(request('saveMemo', staffEmail, { fileId, memo: '職員のメモ' }).ok, true);
-assert.equal(memoAuthor, '閲覧担当');
-assert.equal(request('updateResource', staffEmail, { fileId, phone: '06-1234-0000', renameDriveFile: false }).ok, true);
+const publicMemo = publicWrite('saveMemo', { fileId, memo: '職員のメモ' });
+assert.equal(publicMemo.ok, true);
+assert.equal(publicMemo.item, undefined);
+assert.equal(publicWrite('deleteResource', { fileId, mode: 'search' }).ok, false);
+assert.equal(publicWrite('deleteMemoLog', { logId: publicMemo.logId }).ok, false);
+assert.equal(memoAuthor, '一般利用者');
+const publicEdit = publicWrite('updateResource', { fileId, phone: '06-1234-0000', renameDriveFile: false });
+assert.equal(publicEdit.ok, true);
+assert.equal(publicEdit.item, undefined);
+assert.equal(savedResource.supportNotes, '以前の情報メモ');
 assert.equal(savedResource.phone, '06-1234-0000');
-assert.equal(request('updateResource', staffEmail, { fileId, renameDriveFile: true }).ok, false);
+assert.equal(publicWrite('updateResource', { fileId, renameDriveFile: true }).ok, false);
+assert.equal(publicWrite('updateResource', { fileId, renameDriveFile: 'TRUE' }).ok, false);
 assert.equal(request('listResourceChangeRequests', staffEmail).ok, false);
-assert.equal(request('requestResourceChange', staffEmail, { fileId, kind: 'delete', reason: '掲載終了' }).ok, true);
+assert.equal(publicWrite('requestResourceChange', { fileId, kind: 'delete', reason: '掲載終了' }).ok, true);
 assert.equal(status[0], false);
-assert.equal(request('requestResourceChange', staffEmail, { fileId, kind: 'delete', reason: '重複' }).ok, false);
+assert.equal(publicWrite('requestResourceChange', { fileId, kind: 'delete', reason: '重複' }).ok, false);
 const deletion = request('listResourceChangeRequests', adminEmail).entries[0];
-assert.equal(deletion.requestedBy, '閲覧担当');
+assert.equal(deletion.requestedBy, '一般利用者');
 assert.equal(request('resolveResourceChangeRequest', staffEmail, { requestId: deletion.requestId, resolution: 'search' }).ok, false);
 assert.equal(request('resolveResourceChangeRequest', adminEmail, { requestId: deletion.requestId, resolution: 'search' }).ok, true);
 assert.equal(status[0], true);
 assert.equal(request('restoreResource', adminEmail, { fileId }).ok, true);
-assert.equal(request('requestResourceChange', staffEmail, { fileId, kind: 'replace', reason: '新版', replacementUrl: 'https://example.com/demo.pdf' }).ok, false);
-assert.equal(request('requestResourceChange', staffEmail, { fileId, kind: 'replace', reason: '新版', replacementUrl: 'https://drive.google.com/file/d/new-pdf-test123/view?usp=sharing' }).ok, true);
+assert.equal(publicWrite('requestResourceChange', { fileId, kind: 'replace', reason: '新版', replacementUrl: 'https://example.com/demo.pdf' }).ok, false);
+assert.equal(publicWrite('requestResourceChange', { fileId, kind: 'replace', reason: '新版', replacementUrl: 'https://drive.google.com/file/d/new-pdf-test123/view?usp=sharing' }).ok, true);
 const replacement = request('listResourceChangeRequests', adminEmail).entries[0];
 assert.equal(replacement.replacementFileId, 'new-pdf-test123');
 assert.equal(request('resolveResourceChangeRequest', adminEmail, { requestId: replacement.requestId, resolution: 'drive' }).ok, false);
@@ -235,7 +244,7 @@ assert.equal(request('resolveResourceChangeRequest', adminEmail, { requestId: re
 assert.equal(request('listResourceChangeRequests', adminEmail).total, 0);
 assert.equal(status[0], false);
 assert.equal(read('detail', { fileId }).item.supportNotes, undefined);
-assert.equal(request('updateResource', staffEmail, { fileId, supportNotes: '以前の情報メモ｜内部の新しい情報メモ' }).ok, true);
+assert.equal(publicWrite('updateResource', { fileId, supportNotes: '以前の情報メモ｜内部の新しい情報メモ' }).ok, true);
 context.socialNavRecordActivity_('registered', fileId, '自動同期', fileId);
 context.socialNavRecordActivity_('registered', fileId, '自動同期', fileId);
 const automatic = read('publicUpdates').entries;
@@ -245,7 +254,7 @@ for (const label of ['職員のメモ', '情報メモが追加されました。
 assert(!JSON.stringify(automatic).includes('内部の新しい情報メモ'));
 assert(!JSON.stringify(automatic).includes('閲覧担当'));
 assert.equal(publicRows.filter(row => row[0] === 'registered:' + fileId).length, 1);
-assert(request('timeline', staffEmail).entries.some(entry => entry.type === 'support' && entry.memo === '内部の新しい情報メモ'));
+assert(request('timeline', adminEmail).entries.some(entry => entry.type === 'support' && entry.memo === '内部の新しい情報メモ'));
 
 assert.throws(() => context.socialNavReadPdf_({}, { enabled: false }), /無効/);
 assert.equal(responseCount, 0);

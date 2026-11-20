@@ -5,10 +5,14 @@ const CONFIGURED_GAS_URL = EXPLICIT_GAS_URL
   || (window.location.hostname === 'social-resource-search.vercel.app' ? PRODUCTION_GAS_URL : '');
 const GAS_URL = CONFIGURED_GAS_URL || PRODUCTION_GAS_URL;
 
-async function request(action, params = {}, accessCode) {
+async function request(action, params = {}, accessCode, publicWrite = false) {
   const url = new URL(accessCode === undefined ? GAS_URL : '/api/staff', window.location.origin);
   const options = { cache: 'no-store' };
-  if (accessCode === undefined) {
+  if (publicWrite && !accessCode) {
+    options.method = 'POST';
+    options.headers = { 'Content-Type': 'text/plain;charset=utf-8' };
+    options.body = JSON.stringify({ ...params, action });
+  } else if (accessCode === undefined) {
     url.search = new URLSearchParams({ action, ...params });
   } else {
     if (!accessCode) throw new Error('Googleログインが必要です。');
@@ -38,8 +42,8 @@ export const hidePublicUpdate = (updateId, accessCode) =>
   request('hidePublicUpdate', { updateId }, accessCode);
 export const getStaff = (accessCode) => request('staff', {}, accessCode);
 export const getTimeline = (accessCode, cursor) => request('timeline', { cursor }, accessCode);
-export const updateResource = (payload, accessCode) => request('updateResource', payload, accessCode);
-export const saveMemo = (fileId, memo, accessCode) => request('saveMemo', { fileId, memo }, accessCode);
+export const updateResource = (payload, accessCode) => request('updateResource', payload, accessCode || undefined, true);
+export const saveMemo = (fileId, memo, accessCode) => request('saveMemo', { fileId, memo }, accessCode || undefined, true);
 export const deleteMemoLog = (logId, accessCode) => request('deleteMemoLog', { logId }, accessCode);
 
 
@@ -53,7 +57,7 @@ export const rereadIntake = (fileId, accessCode) => request('intakeReread', { fi
 export const approveIntake = (fileId, data, accessCode) => request('intakeApprove', { fileId, data }, accessCode);
 
 export const requestResourceChange = (fileId, fields, accessCode) =>
-  request('requestResourceChange', { fileId, ...fields }, accessCode);
+  request('requestResourceChange', { fileId, ...fields }, accessCode || undefined, true);
 export const listResourceChangeRequests = (accessCode) =>
   request('listResourceChangeRequests', {}, accessCode);
 export const resolveResourceChangeRequest = (requestId, resolution, accessCode) =>

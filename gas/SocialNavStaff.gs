@@ -3,7 +3,7 @@ function socialNavRead(request) {
   try {
     switch (params.action || 'search') {
       case 'ping':
-        return jsonOutput({ok: true, message: 'pong', version: 'google-staff-v1'});
+        return jsonOutput({ok: true, message: 'pong', version: 'public-edit-v1'});
       case 'publicUpdates':
         return jsonOutput(socialNavPublicUpdates_());
       case 'search': {
@@ -30,24 +30,27 @@ function socialNavRead(request) {
 
 function socialNavWrite(request) {
   try {
-    const verified = socialNavVerifiedRequest_(JSON.parse(request?.postData?.contents || '{}'));
-    if (!verified) return jsonOutput({ok: false, error: '編集権限のあるGoogleアカウントでログインしてください。'});
+    const envelope = JSON.parse(request?.postData?.contents || '{}');
+    const publicActions = ['saveMemo', 'updateResource', 'requestResourceChange'];
+    const publicWrite = !envelope.signed && publicActions.includes(envelope.action);
+    const verified = publicWrite
+      ? {body: envelope, staff: {name: '一般利用者', role: 'public', publicDisplayName: '一般利用者'}}
+      : socialNavVerifiedRequest_(envelope);
+    if (!verified) return jsonOutput({ok: false, error: '管理者のGoogleアカウントでログインしてください。'});
     if (verified.enrollment) {
       return jsonOutput({ok: false, error: '初回登録が必要です。本人確認のため、管理者へこの登録IDを伝えてください。\n' + verified.enrollment});
     }
     const {body, staff} = verified;
-    if (body.action === 'staff') return jsonOutput({ok: true, staff});
+    if (body.action === 'staff' && staff.role === 'admin') return jsonOutput({ok: true, staff});
+    if (!publicWrite && staff.role !== 'admin') {
+      return jsonOutput({ok: false, error: '管理者権限が必要です。'});
+    }
     if (body.action === 'timeline') return jsonOutput(socialNavTimeline_(body.cursor));
     if (body.action === 'staffSearch') return jsonOutput(searchResources(body));
     if (body.action === 'staffDetail') {
       const result = getResource(body.fileId);
       return jsonOutput(result.item?.deletionReason === 'intake' ? {ok: false, error: '登録処理中です。'} : result);
     }
-    const staffActions = ['saveMemo', 'updateResource', 'requestResourceChange', 'publishPublicUpdate'];
-    if (staff.role !== 'admin' && !staffActions.includes(body.action)) {
-      return jsonOutput({ok: false, error: '管理者権限が必要です。'});
-    }
-
     const lock = LockService.getScriptLock();
     lock.waitLock(10000);
     try {
@@ -69,11 +72,12 @@ function socialNavWrite(request) {
             return jsonOutput({ok: false, error: '更新できる事業所が見つかりません。'});
           }
           const memo = String(body.memo || '').trim();
+          if (!memo || memo.length > 2000) return jsonOutput({ok: false, error: '更新メモは2000文字以内で入力してください。'});
           const result = saveMemoLog(body.fileId, socialNavSheetText_(memo), staff.name);
           if (result.ok && result.logId) {
             socialNavRecordActivity_('memo', body.fileId, staff.name, result.logId, '', staff.publicDisplayName, memo);
           }
-          return jsonOutput(result);
+          return jsonOutput(publicWrite && result.ok ? {ok: true, logId: result.logId} : result);
         }
         case 'deleteMemoLog': {
           const result = deleteMemoLog(body.logId);
@@ -104,7 +108,7 @@ function socialNavWrite(request) {
           if (!resource.ok || socialNavDeleted_(resource.item)) {
             return jsonOutput({ok: false, error: '更新できる事業所が見つかりません。'});
           }
-          if (String(body.renameDriveFile) === 'true') {
+          if (String(body.renameDriveFile).toLowerCase() === 'true') {
             if (staff.role !== 'admin') return jsonOutput({ok: false, error: 'PDF名の変更は管理者のみ行えます。'});
             const types = String(body.serviceType || '').split(',').map(value => value.trim()).filter(Boolean);
             if (types.length !== 1) return jsonOutput({ok: false, error: 'サービス種別を1つ選んでください。'});
@@ -117,8 +121,24 @@ function socialNavWrite(request) {
             }
           }
           const fields = ['area', 'serviceType', 'businessName', 'tags', 'supportFlags', 'supportNotes', 'phone', 'address', 'searchKeywords'];
+          if (publicWrite) {
+            for (const field of fields) {
+              if (field === 'supportNotes') continue;
+              if (!Object.prototype.hasOwnProperty.call(body, field)) body[field] = String(resource.item[field] || '');
+            }
+            if (fields.some(field => body[field] !== undefined &&
+                (typeof body[field] !== 'string' || body[field].length > 2000))) {
+              return jsonOutput({ok: false, error: '各項目は2000文字以内で入力してください。'});
+            }
+          }
           if (fields.some(field => /^\s*=/.test(String(body[field] || '')))) {
             return jsonOutput({ok: false, error: '基本情報の先頭に等号を入力できません。'});
+          }
+          if (publicWrite) {
+            body.renameDriveFile = false;
+            const existingNotes = String(resource.item.supportNotes || '').split('｜').map(note => note.trim()).filter(Boolean);
+            const newNotes = String(body.supportNotes || '').split('｜').map(note => note.trim()).filter(Boolean);
+            body.supportNotes = [...new Set([...existingNotes, ...newNotes])].join('｜');
           }
           const result = updateResource(body);
           if (result.ok) {
@@ -129,7 +149,7 @@ function socialNavWrite(request) {
               .filter(note => note && !previousNotes.has(note));
             if (additions.length) socialNavRecordActivity_('support', body.fileId, staff.name, '', additions.join('\n'), staff.publicDisplayName);
           }
-          return jsonOutput(result);
+          return jsonOutput(publicWrite && result.ok ? {ok: true} : result);
         }
         default:
           return jsonOutput({ok: false, error: '利用できない操作です。'});
