@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import logo from './assets/logo2.png';
+import IntakePanel from './IntakePanel';
+import { ResourceChangeForm, ResourceChangeQueue } from './ResourceChange';
 import {
   Search,
   MapPin,
@@ -17,6 +19,10 @@ import { searchResources,
   getResourceDetail,
   updateResource,
   saveMemo,
+  getStaff,
+  getTimeline,
+  deleteResource,
+  restoreResource,
   deleteMemoLog, } from './api';
 import './App.css';
 
@@ -176,6 +182,14 @@ const parseCommaValues = (value) =>
     .map((v) => v.trim())
     .filter(Boolean);
 
+const currentConsultationTag = (tags) =>
+  parseCommaValues(tags).find((tag) => CONSULTATION_TAGS.includes(tag)) || '';
+
+const memoAuthor = (value) => value && !['admin', 'manual'].includes(value) ? value : '不明';
+const memoDate = (value) => value
+  ? new Date(value).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })
+  : '';
+
 const parseSupportNotes = (value) =>
   String(value || '')
     .split('｜')
@@ -188,7 +202,6 @@ export default function App() {
   const [selectedRegions, setSelectedRegions] = useState([]);
   const [selectedType, setSelectedType] = useState('すべて');
   const [selectedConsultationType, setSelectedConsultationType] = useState('すべて');
-  const [onlyUnclassified, setOnlyUnclassified] = useState(false);
   const [includeDeleted, setIncludeDeleted] = useState(false);
 
   const [resources, setResources] = useState([]);
@@ -202,7 +215,18 @@ export default function App() {
   const [editPhone, setEditPhone] = useState('');
   const [editAddress, setEditAddress] = useState('');
   const [editTags, setEditTags] = useState('');
-  const [isAdminMode, setIsAdminMode] = useState(true);
+  const [isAdminMode, setIsAdminMode] = useState(false);
+  const [showChangeQueue, setShowChangeQueue] = useState(false);
+  const [accessCode, setAccessCode] = useState('');
+  const [staff, setStaff] = useState(null);
+  const [showStaffForm, setShowStaffForm] = useState(false);
+  const [showTimeline, setShowTimeline] = useState(false);
+  const [showIntake, setShowIntake] = useState(false);
+  const [timelineEntries, setTimelineEntries] = useState([]);
+  const [timelineCursor, setTimelineCursor] = useState(null);
+  const [staffBusy, setStaffBusy] = useState(false);
+  const [staffError, setStaffError] = useState('');
+  const [changingDeletion, setChangingDeletion] = useState(false);
   const [renameDriveFile, setRenameDriveFile] = useState(false);
 
   const [loading, setLoading] = useState(false);
@@ -213,6 +237,83 @@ export default function App() {
   const [editSupportFlags, setEditSupportFlags] = useState('');
   const [editSupportNotes, setEditSupportNotes] = useState(['', '', '', '', '']);
 
+  const selectedEditServices = parseCommaValues(editServiceType);
+  const editableServices = [...new Set([
+    ...SERVICE_TYPES.filter((type) => type !== 'すべて'),
+    ...selectedEditServices,
+  ])];
+  const supportOptions = selectedEditServices.length
+    ? [...new Set(selectedEditServices.flatMap(getSupportFlagOptionsByType))]
+    : DEFAULT_SUPPORT_FLAG_OPTIONS;
+  const canRename = selectedEditServices.length === 1
+    && SERVICE_TYPES.includes(selectedEditServices[0])
+    && selectedEditServices[0] !== 'すべて';
+  const resourceDeleted = String(selectedResource?.isDeleted || '').toLowerCase() === 'true';
+  const filenameCategory = selectedEditServices[0] === '相談'
+    ? currentConsultationTag(editTags) || '相談'
+    : selectedEditServices[0];
+  const nextFileName = [editArea, filenameCategory, editBusinessName]
+    .filter(Boolean)
+    .join('_') + '.pdf';
+
+  const toggleEditService = (type) => {
+    const next = selectedEditServices.includes(type)
+      ? selectedEditServices.filter((service) => service !== type)
+      : [...selectedEditServices, type];
+    setEditServiceType(next.join(','));
+    setRenameDriveFile(false);
+  };
+
+  const signIn = async (event) => {
+    event.preventDefault();
+    setStaffBusy(true);
+    setStaffError('');
+    try {
+      const result = await getStaff(accessCode);
+      setStaff(result.staff);
+      setShowStaffForm(false);
+    } catch (err) {
+      setStaffError(err.message);
+    } finally {
+      setStaffBusy(false);
+    }
+  };
+
+  const signOut = () => {
+    setStaff(null);
+    setAccessCode('');
+    setIsAdminMode(false);
+    setShowChangeQueue(false);
+    setShowTimeline(false);
+    setShowIntake(false);
+    setTimelineEntries([]);
+    setTimelineCursor(null);
+    setStaffError('');
+  };
+
+  const openTimeline = async (cursor) => {
+    if (!staff) {
+      setShowStaffForm(true);
+      return;
+    }
+    setShowTimeline(true);
+    setStaffBusy(true);
+    setStaffError('');
+    if (!cursor) {
+      setTimelineEntries([]);
+      setTimelineCursor(null);
+    }
+    try {
+      const result = await getTimeline(accessCode, cursor);
+      setTimelineEntries((entries) => cursor ? [...entries, ...result.entries] : result.entries);
+      setTimelineCursor(result.nextCursor);
+    } catch (err) {
+      setStaffError(err.message);
+    } finally {
+      setStaffBusy(false);
+    }
+  };
+
   const loadResources = async () => {
     try {
       setLoading(true);
@@ -222,7 +323,6 @@ export default function App() {
         area: selectedRegions.join(','),
         serviceType: selectedType,
         consultationType: selectedConsultationType,
-        onlyUnclassified,
         includeDeleted,
       });
 
@@ -286,20 +386,6 @@ const handleReset = () => {
   setMemo('');
 };
 
-  const toggleTag = (tag) => {
-  const currentTags = String(editTags || '')
-    .split(',')
-    .map(t => t.trim())
-    .filter(Boolean);
-
-  const exists = currentTags.includes(tag);
-
-  const nextTags = exists
-    ? currentTags.filter(t => t !== tag)
-    : [...currentTags, tag];
-
-  setEditTags(nextTags.join(','));
-};
 
 
 const selectConsultationTag = (tag) => {
@@ -313,12 +399,6 @@ const selectConsultationTag = (tag) => {
 
   setEditTags(nextTags.join(','));
 };
-
-const currentConsultationTag = (tags) =>
-  String(tags || '')
-    .split(',')
-    .map(t => t.trim())
-    .find(t => CONSULTATION_TAGS.includes(t)) || '';
 
 const toggleSupportFlag = (flag) => {
   const currentFlags = String(editSupportFlags || '')
@@ -365,13 +445,38 @@ const buildMapUrl = (resource) => {
     }
   };
 
+  const changeDeletion = async (mode) => {
+    const fileId = selectedResource.fileId;
+    const message = {
+      search: 'PDFを残したまま検索対象から外しますか？',
+      drive: 'PDFをGoogle Driveのゴミ箱に移動し、検索対象から外しますか？',
+      restore: 'PDFと登録データを検索対象に戻しますか？',
+    }[mode];
+    if (!window.confirm(message)) return;
+    setChangingDeletion(true);
+    setError('');
+    try {
+      if (mode === 'restore') await restoreResource(fileId, accessCode);
+      else await deleteResource(fileId, mode, accessCode);
+      if (mode !== 'restore') {
+        setTimelineEntries((entries) => entries.filter((entry) => entry.fileId !== fileId));
+      }
+      if (hasSearched) await loadResources();
+      await handleOpenDetail(fileId);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setChangingDeletion(false);
+    }
+  };
+
   const handleSaveMemo = async () => {
     if (!selectedResource?.fileId) return;
 
     try {
       setSavingMemo(true);
       setError('');
-      const result = await saveMemo(selectedResource.fileId, memo, 'admin');
+      const result = await saveMemo(selectedResource.fileId, memo, accessCode);
       if (!result.ok) {
         throw new Error(result.error || 'メモ保存に失敗しました');
       }
@@ -395,7 +500,7 @@ syncEditForm(refreshed.item);
   if (!ok) return;
 
   try {
-    const result = await deleteMemoLog(logId);
+    const result = await deleteMemoLog(logId, accessCode);
 
     if (!result.ok) {
       alert(result.error || '削除に失敗しました');
@@ -408,6 +513,7 @@ syncEditForm(refreshed.item);
   ...detail.item,
   memoLogs: detail.memoLogs || [],
 });
+    setTimelineEntries((entries) => entries.filter((entry) => entry.logId !== logId));
   } catch (error) {
     alert(error.message || '削除に失敗しました');
   }
@@ -416,15 +522,8 @@ syncEditForm(refreshed.item);
   const handleSaveEdit = async () => {
     if (!selectedResource?.fileId) return;
 
-    const middleName = editServiceType === '相談'
-      ? currentConsultationTag(editTags) || '相談'
-      : editServiceType;
-    const nextFileName = [editArea, middleName, editBusinessName]
-      .filter(Boolean)
-      .join('_') + '.pdf';
-
     if (renameDriveFile) {
-      if (!SERVICE_TYPES.includes(editServiceType) || editServiceType === 'すべて') {
+      if (!canRename) {
         setError('PDF名を変更する場合は、サービス種別を1つ選択してください。');
         return;
       }
@@ -446,14 +545,14 @@ syncEditForm(refreshed.item);
   searchKeywords: editKeywords,
   phone: editPhone,
   address: editAddress,
-  renameDriveFile,
+  renameDriveFile: isAdminMode && renameDriveFile,
   tags: editTags,
   supportFlags: editSupportFlags,
   supportNotes: editSupportNotes
   .map(v => v.trim())
   .filter(Boolean)
   .join('｜'),
-});
+}, accessCode);
 
       if (!result.ok) {
         throw new Error(result.error || '情報更新に失敗しました');
@@ -467,6 +566,7 @@ setSelectedResource({
 syncEditForm(refreshed.item);
 
       await loadResources();
+      if (result.warning) setError(result.warning);
     } catch (err) {
       setError(err.message || '情報更新に失敗しました');
     } finally {
@@ -477,7 +577,7 @@ syncEditForm(refreshed.item);
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="sticky top-0 z-20 border-b bg-white/90 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4">
           <div className="flex items-center gap-3">
   <img
     src={logo}
@@ -495,15 +595,15 @@ syncEditForm(refreshed.item);
   </div>
 </div>
 
-          <div className="flex items-center gap-2">
-  <a
-    href="https://drive.google.com/drive/folders/1blm-UZNHp0XccNfVY19WOvM4omWwrEmr"
+          <div className="flex flex-wrap items-center gap-2">
+  {(!import.meta.env.VITE_GAS_URL || import.meta.env.VITE_UPLOAD_FOLDER_URL) && <a
+    href={import.meta.env.VITE_UPLOAD_FOLDER_URL || "https://drive.google.com/drive/folders/1blm-UZNHp0XccNfVY19WOvM4omWwrEmr"}
     target="_blank"
     rel="noreferrer"
     className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-2 text-sm font-bold text-slate-700 shadow-md ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-lg active:translate-y-0 active:shadow-sm"
   >
     📁 PDFアップロード
-      </a>
+      </a>}
     
       <a
         href={MANUAL_URL}
@@ -517,7 +617,27 @@ syncEditForm(refreshed.item);
     
       <button
         type="button"
-        onClick={() => setIsAdminMode((prev) => !prev)}
+        onClick={() => showTimeline ? setShowTimeline(false) : openTimeline()}
+        disabled={staffBusy}
+        className="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-bold"
+      >
+        タイムライン
+      </button>
+      <button
+        type="button"
+        onClick={() => staff ? signOut() : setShowStaffForm((visible) => !visible)}
+        disabled={staffBusy || savingMemo || savingEdit}
+        className="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-bold"
+      >
+        {staff ? staff.name + '・ログアウト' : '職員ログイン'}
+      </button>
+      {staff?.role === 'admin' && <button
+        type="button"
+        onClick={() => {
+          setIsAdminMode((prev) => !prev);
+          setShowIntake(false);
+          setShowChangeQueue(false);
+        }}
         className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-bold shadow-md transition ${
           isAdminMode
             ? 'bg-amber-500 text-white hover:bg-amber-600'
@@ -526,7 +646,15 @@ syncEditForm(refreshed.item);
       >
         <Edit3 className="h-4 w-4" />
         {isAdminMode ? '管理モード' : '利用モード'}
-      </button>
+      </button>}
+      {isAdminMode && <button type="button" onClick={() => setShowIntake(true)}
+        className="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-bold">
+        AI受付
+      </button>}
+      {isAdminMode && <button type="button" onClick={() => setShowChangeQueue(true)}
+        className="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-bold">
+        資料変更依頼
+      </button>}
 
       <button
         onClick={handleReset}
@@ -538,6 +666,76 @@ syncEditForm(refreshed.item);
     </div>
         </div>
       </header>
+
+      {showChangeQueue && isAdminMode && (
+        <ResourceChangeQueue accessCode={accessCode} onClose={() => setShowChangeQueue(false)}
+          onChanged={async () => {
+            if (hasSearched) await loadResources();
+            if (selectedResource) await handleOpenDetail(selectedResource.fileId);
+          }} />
+      )}
+
+      {showIntake && isAdminMode && (
+        <IntakePanel accessCode={accessCode} regions={REGIONS.filter((value) => value !== 'すべて')}
+          services={SERVICE_TYPES.filter((value) => value !== 'すべて')} consultations={CONSULTATION_TAGS}
+          supportOptions={(types) => [...new Set(types.flatMap(getSupportFlagOptionsByType))]}
+          onClose={() => setShowIntake(false)} onRegistered={() => hasSearched && loadResources()} />
+      )}
+
+      {showStaffForm && !staff && (
+        <form onSubmit={signIn} className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3">
+          <label className="text-sm font-bold">
+            職員コード
+            <input
+              type="password"
+              value={accessCode}
+              onChange={(event) => setAccessCode(event.target.value)}
+              autoComplete="current-password"
+              required
+              className="ml-2 rounded-xl border px-3 py-2"
+            />
+          </label>
+          <button type="submit" disabled={staffBusy} className="rounded-xl bg-blue-700 px-4 py-2 text-white">
+            ログイン
+          </button>
+          {staffError && <p role="alert" className="text-red-700">{staffError}</p>}
+        </form>
+      )}
+
+      {showTimeline && staff && (
+        <section aria-labelledby="timeline-heading" className="mx-auto max-w-7xl space-y-3 px-4 py-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 id="timeline-heading" className="text-xl font-bold">タイムライン</h2>
+            <button type="button" disabled={staffBusy} onClick={() => openTimeline()} className="rounded-xl border px-3 py-1">
+              最新を取得
+            </button>
+          </div>
+          {staffError && <p role="alert" className="text-red-700">{staffError}</p>}
+          {staffBusy && <p role="status">読み込み中…</p>}
+          {!staffBusy && !staffError && timelineEntries.length === 0 && <p>更新メモはありません。</p>}
+          <ol className="max-h-[60vh] space-y-3 overflow-y-auto">
+            {timelineEntries.map((entry) => (
+              <li key={entry.logId} className="rounded-2xl border bg-white p-4">
+                <time dateTime={entry.createdAt} className="text-sm text-slate-600">{memoDate(entry.createdAt)}</time>
+                <div>
+                  <button type="button" className="font-bold text-blue-700 underline" onClick={() => {
+                    setShowTimeline(false);
+                    handleOpenDetail(entry.fileId);
+                  }}>
+                    {entry.businessName || '事業所詳細を開く'}
+                  </button>
+                </div>
+                <p className="text-sm text-slate-600">{[entry.area, entry.serviceType].filter(Boolean).join('／')}</p>
+                <p className="my-2 whitespace-pre-wrap break-words">{entry.memo}</p>
+                <p className="text-sm">入力者：{memoAuthor(entry.createdBy)}</p>
+              </li>
+            ))}
+          </ol>
+          {timelineCursor && <button type="button" disabled={staffBusy} onClick={() => openTimeline(timelineCursor)} className="rounded-xl border px-4 py-2">
+            さらに表示
+          </button>}
+        </section>
+      )}
 
       <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6 xl:h-[calc(100vh-96px)] xl:grid-cols-[0.85fr_1fr_1.05fr]">
   {/* 左：検索条件 */}
@@ -869,6 +1067,32 @@ syncEditForm(refreshed.item);
                 )}
 
                 {isAdminMode && (
+                  <div className="space-y-2 rounded-3xl border border-slate-200 p-4">
+                    <h4 className="font-black">削除・復元</h4>
+                    {resourceDeleted && <p className="text-sm">
+                      {selectedResource.deletionReason === 'search' ? '検索対象外（PDFは保持）'
+                        : selectedResource.deletionReason === 'drive' ? 'PDFをゴミ箱へ移動済み'
+                          : '削除済み（同期で検出）'}
+                    </p>}
+                    <div className="flex flex-wrap gap-2">
+                      {(resourceDeleted
+                        ? [['restore', '検索対象に復元']]
+                        : [['search', '検索対象から外す'], ['drive', 'PDFをゴミ箱に移動']]
+                      ).map(([mode, label]) => (
+                        <button key={mode} type="button" disabled={changingDeletion || savingEdit || savingMemo}
+                          onClick={() => changeDeletion(mode)} className="rounded-xl border px-3 py-2 text-sm font-bold">
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {staff && !resourceDeleted && (
+                  <ResourceChangeForm key={selectedResource.fileId} fileId={selectedResource.fileId} accessCode={accessCode} />
+                )}
+
+                {staff && !resourceDeleted && (
                 <div className="rounded-3xl border border-slate-200 p-4">
                   <div className="mb-3 flex items-center gap-2">
                     <Edit3 className="h-4 w-4 text-slate-500" />
@@ -876,11 +1100,12 @@ syncEditForm(refreshed.item);
                   </div>
 
                   <div className="space-y-3">
-                    <div className="rounded-2xl bg-amber-50 p-3 ring-1 ring-amber-200">
+                    {isAdminMode && <div className="rounded-2xl bg-amber-50 p-3 ring-1 ring-amber-200">
                       <label className="flex items-start gap-2 text-sm font-black text-amber-900">
                         <input
                           type="checkbox"
                           checked={renameDriveFile}
+                          disabled={!canRename}
                           onChange={(e) => setRenameDriveFile(e.target.checked)}
                           className="mt-1"
                         />
@@ -890,9 +1115,7 @@ syncEditForm(refreshed.item);
                         <>
                           <p className="mt-2 text-xs font-bold text-amber-800">変更後のPDFファイル名</p>
                           <p className="mt-1 break-all text-sm text-amber-800">
-                            {[editArea, editServiceType === '相談' ? currentConsultationTag(editTags) || '相談' : editServiceType, editBusinessName]
-                              .filter(Boolean)
-                              .join('_')}.pdf
+                            {nextFileName}
                           </p>
                           <p className="mt-2 text-xs text-amber-700">
                             チェック時だけDriveのPDF名を変更します。サービス種別は1つ選択してください。
@@ -900,10 +1123,12 @@ syncEditForm(refreshed.item);
                         </>
                       ) : (
                         <p className="mt-2 text-xs text-amber-700">
-                          通常の保存ではPDF名を変えず、スプレッドシートの基本情報だけ更新します。
+                            {canRename
+                              ? '通常の保存ではスプレッドシートの基本情報を更新します。'
+                              : 'PDF名を変更するには、分類にあるサービス種別を1つ選択してください。'}
                         </p>
                       )}
-                    </div>
+                    </div>}
 
                     <div>
                       <label className="mb-1 block text-sm font-bold text-slate-600">地域</label>
@@ -914,21 +1139,25 @@ syncEditForm(refreshed.item);
                       />
                     </div>
 
-                    <div>
-                      <label className="mb-1 block text-sm font-bold text-slate-600">サービス種別</label>
-                      <select
-                        value={editServiceType}
-                        onChange={(e) => setEditServiceType(e.target.value)}
-                        className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 outline-none focus:border-blue-500"
-                      >
-                        <option value="">未分類</option>
-                        {SERVICE_TYPES.filter((type) => type !== 'すべて').map((type) => (
-                          <option key={type} value={type}>
+                    <fieldset>
+                      <legend className="mb-2 text-sm font-bold text-slate-600">サービス種別（複数選択可）</legend>
+                      <p className="mb-2 text-xs text-slate-500">
+                        {selectedEditServices.length ? selectedEditServices.join('、') : '未分類'}
+                      </p>
+                      <div className="grid max-h-48 gap-2 overflow-y-auto rounded-2xl border border-slate-200 p-3 sm:grid-cols-2">
+                        {editableServices.map((type) => (
+                          <label key={type} className="flex items-start gap-2 text-sm text-slate-700">
+                            <input
+                              type="checkbox"
+                              checked={selectedEditServices.includes(type)}
+                              onChange={() => toggleEditService(type)}
+                              className="mt-1"
+                            />
                             {type}
-                          </option>
+                          </label>
                         ))}
-                      </select>
-                    </div>
+                      </div>
+                    </fieldset>
 
                     <div>
                       <label className="mb-1 block text-sm font-bold text-slate-600">事業所名</label>
@@ -1009,11 +1238,11 @@ syncEditForm(refreshed.item);
                       <label className="mb-2 block text-sm font-bold text-slate-600">必須情報</label>
                       
                       <p className="mb-2 text-xs font-bold text-slate-400">
-                        {editServiceType || '未分類'} 用の選択肢を表示中
+                        {selectedEditServices.join('、') || '未分類'} 用の選択肢を表示中
                       </p>
 
                       <div className="mb-3 flex flex-wrap gap-2">
-                        {getSupportFlagOptionsByType(editServiceType).map((flag) => {
+                        {supportOptions.map((flag) => {
                           const selectedFlags = String(editSupportFlags || '')
                           .split(',')
                           .map(v => v.trim())
@@ -1080,7 +1309,7 @@ syncEditForm(refreshed.item);
                 </div>
                 )}
 
-                {isAdminMode && (
+                {staff && !resourceDeleted && (
                 <div className="rounded-3xl border border-slate-200 p-4">
                   <div className="mb-3 flex items-center gap-2">
                     <History className="h-4 w-4 text-slate-500" />
@@ -1113,21 +1342,21 @@ syncEditForm(refreshed.item);
   <div key={log.logId} className="rounded-2xl bg-slate-50 p-3 text-sm">
     <div className="mb-1 flex items-center justify-between gap-2">
       <span className="font-bold text-slate-600">
-        {log.createdBy || 'manual'}
+        {memoAuthor(log.createdBy)}
       </span>
 
       <div className="flex items-center gap-2">
         <span className="text-xs text-slate-400">
-          {String(log.createdAt || '')}
+          {memoDate(log.createdAt)}
         </span>
 
-        <button
+        {isAdminMode && <button
   type="button"
   onClick={() => handleDeleteMemoLog(log.logId)}
   className="rounded-xl bg-white px-3 py-1 text-xs font-bold text-red-600 shadow-md ring-1 ring-red-100 transition hover:-translate-y-0.5 hover:bg-red-50 hover:shadow-lg active:translate-y-0 active:shadow-sm"
 >
   削除
-</button>
+</button>}
       </div>
     </div>
 

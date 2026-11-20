@@ -1,116 +1,54 @@
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbw4n2PeyuQNU9UtdvwLx6E1DnC4VcgiSzKZ1PIKhS4tnblZkU5ZGn9M6hXTa050D2g41Q/exec';
-export async function searchResources({
-  q = '',
-  area = 'すべて',
-  serviceType = 'すべて',
-  onlyUnclassified = false,
-  includeDeleted = false,
-}) {
+const EXPLICIT_GAS_URL = import.meta.env.VITE_GAS_URL;
+const PRODUCTION_GAS_URL = 'https://script.google.com/macros/s/AKfycbw4n2PeyuQNU9UtdvwLx6E1DnC4VcgiSzKZ1PIKhS4tnblZkU5ZGn9M6hXTa050D2g41Q/exec';
+
+const CONFIGURED_GAS_URL = EXPLICIT_GAS_URL
+  || (window.location.hostname === 'social-resource-search.vercel.app' ? PRODUCTION_GAS_URL : '');
+const GAS_URL = CONFIGURED_GAS_URL || PRODUCTION_GAS_URL;
+
+async function request(action, params = {}, accessCode) {
   const url = new URL(GAS_URL);
-  url.searchParams.set('action', 'search');
-  url.searchParams.set('q', q);
-  url.searchParams.set('area', area);
-  url.searchParams.set('serviceType', serviceType);
-  url.searchParams.set('onlyUnclassified', String(onlyUnclassified));
-  url.searchParams.set('includeDeleted', String(includeDeleted));
-  const res = await fetch(url.toString());
-  if (!res.ok) {
-    throw new Error('検索に失敗しました');
+  const options = { cache: 'no-store' };
+  if (accessCode === undefined) {
+    url.search = new URLSearchParams({ action, ...params });
+  } else {
+    if (!CONFIGURED_GAS_URL) throw new Error('職員機能の接続先が設定されていません。');
+    if (!accessCode) throw new Error('職員コードを入力してください。');
+    options.method = 'POST';
+    options.headers = { 'Content-Type': 'text/plain;charset=utf-8' };
+    options.body = JSON.stringify({ ...params, action, accessCode });
   }
-  return res.json();
-}
-
-export async function getResourceDetail(fileId) {
-  const url = new URL(GAS_URL);
-  url.searchParams.set('action', 'detail');
-  url.searchParams.set('fileId', fileId);
-
-  const res = await fetch(url.toString());
-  if (!res.ok) {
-    throw new Error('詳細取得に失敗しました');
-  }
-  return res.json();
-}
-
-export async function updateResource(payload) {
-  const url = new URL(GAS_URL);
-
-  url.searchParams.set('action', 'updateResource');
-
-  Object.entries(payload || {}).forEach(([key, value]) => {
-    if (value === undefined || value === null) {
-      url.searchParams.set(key, '');
-    } else {
-      url.searchParams.set(key, String(value));
-    }
+  const response = await fetch(url, options).catch(() => {
+    throw new Error('GASに接続できませんでした。接続先URLとアクセス設定を確認してください。');
   });
-
-  const res = await fetch(url.toString(), {
-    method: 'GET',
-    cache: 'no-store',
+  if (!response.ok) throw new Error(`通信に失敗しました（HTTP ${response.status}）。`);
+  const data = await response.json().catch(() => {
+    throw new Error('サーバーの応答を読み取れませんでした。');
   });
-
-  const text = await res.text();
-
-  console.log('UPDATE STATUS', res.status);
-  console.log('UPDATE BODY', text);
-
-  if (!res.ok) {
-    throw new Error(`情報更新に失敗しました（HTTP ${res.status}）`);
-  }
-
-  let data;
-
-  try {
-    data = JSON.parse(text);
-  } catch {
-    throw new Error(
-      `GASからJSON以外の応答が返りました。\n\n${text}`
-    );
-  }
-
-  if (!data.ok) {
-    throw new Error(data.error || '情報更新に失敗しました');
-  }
-
+  if (!data.ok) throw new Error(data.error || '処理に失敗しました。');
   return data;
 }
-export async function saveMemo(fileId, memo, createdBy = 'manual') {
-  const res = await fetch(GAS_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'text/plain;charset=utf-8',
-    },
-    body: JSON.stringify({
-      action: 'saveMemo',
-      fileId,
-      memo,
-      createdBy,
-    }),
-  });
 
-  if (!res.ok) {
-    throw new Error('メモ保存に失敗しました');
-  }
+export const searchResources = (params) => request('search', params);
+export const getResourceDetail = (fileId) => request('detail', { fileId });
+export const getStaff = (accessCode) => request('staff', {}, accessCode);
+export const getTimeline = (accessCode, cursor) => request('timeline', { cursor }, accessCode);
+export const updateResource = (payload, accessCode) => request('updateResource', payload, accessCode);
+export const saveMemo = (fileId, memo, accessCode) => request('saveMemo', { fileId, memo }, accessCode);
+export const deleteMemoLog = (logId, accessCode) => request('deleteMemoLog', { logId }, accessCode);
 
-  return res.json();
-}
 
-export async function deleteMemoLog(logId) {
-  const res = await fetch(GAS_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'text/plain;charset=utf-8',
-    },
-    body: JSON.stringify({
-      action: 'deleteMemoLog',
-      logId,
-    }),
-  });
+export const deleteResource = (fileId, mode, accessCode) =>
+  request('deleteResource', { fileId, mode }, accessCode);
+export const restoreResource = (fileId, accessCode) =>
+  request('restoreResource', { fileId }, accessCode);
 
-  if (!res.ok) {
-    throw new Error('メモ削除に失敗しました');
-  }
+export const getIntake = (accessCode, offset) => request('intakeList', { offset }, accessCode);
+export const rereadIntake = (fileId, accessCode) => request('intakeReread', { fileId }, accessCode);
+export const approveIntake = (fileId, data, accessCode) => request('intakeApprove', { fileId, data }, accessCode);
 
-  return res.json();
-}
+export const requestResourceChange = (fileId, fields, accessCode) =>
+  request('requestResourceChange', { fileId, ...fields }, accessCode);
+export const listResourceChangeRequests = (accessCode) =>
+  request('listResourceChangeRequests', {}, accessCode);
+export const resolveResourceChangeRequest = (requestId, resolution, accessCode) =>
+  request('resolveResourceChangeRequest', { requestId, resolution }, accessCode);
