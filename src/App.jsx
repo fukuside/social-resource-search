@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import logo from './assets/logo2.png';
 import IntakePanel from './IntakePanel';
+import GoogleStaffLogin from './GoogleStaffLogin';
 import { ResourceChangeForm, ResourceChangeQueue } from './ResourceChange';
 import { PublicUpdateFeed, PublicUpdateForm } from './PublicUpdates';
 import {
@@ -266,15 +267,16 @@ export default function App() {
     setRenameDriveFile(false);
   };
 
-  const signIn = async (event) => {
-    event.preventDefault();
+  const signIn = async (credential) => {
+    if (staffBusy) return;
     setStaffBusy(true);
     setStaffError('');
     try {
-      const result = await getStaff(accessCode);
+      const result = await getStaff(credential);
+      setAccessCode(credential);
       setStaff(result.staff);
       setShowStaffForm(false);
-      if (selectedResource) await handleOpenDetail(selectedResource.fileId, accessCode);
+      if (selectedResource) await handleOpenDetail(selectedResource.fileId, credential);
     } catch (err) {
       setStaffError(err.message);
     } finally {
@@ -586,31 +588,14 @@ syncEditForm(refreshed.item);
   };
 
   const staffLoginForm = (
-    <form onSubmit={signIn} className="flex flex-wrap items-end gap-3">
-      <label className="min-w-0 flex-1 text-sm font-bold">
-        職員コード
-        <input
-          id="staff-access-code"
-          type="password"
-          value={accessCode}
-          onChange={(event) => setAccessCode(event.target.value)}
-          autoComplete="current-password"
-          required
-          className="mt-1 block w-full rounded-xl border border-slate-300 bg-white px-3 py-2"
-        />
-      </label>
-      <button type="submit" disabled={staffBusy} className="rounded-xl bg-blue-700 px-4 py-2 font-bold text-white disabled:opacity-60">
-        {staffBusy ? '確認中…' : 'ログイン'}
-      </button>
-      {staffError && <p role="alert" className="w-full text-sm text-red-700">{staffError}</p>}
-    </form>
+    <GoogleStaffLogin onCredential={signIn} busy={staffBusy} error={staffError} />
   );
 
   const openStaffLogin = () => {
     if (staff) {
       signOut();
     } else if (selectedResource && !resourceDeleted) {
-      document.getElementById('staff-access-code')?.focus();
+      document.getElementById('staff-google-login')?.focus();
     } else {
       setShowStaffForm((visible) => !visible);
     }
@@ -671,7 +656,7 @@ syncEditForm(refreshed.item);
         disabled={staffBusy || savingMemo || savingEdit}
         className="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-bold"
       >
-        {staff ? staff.name + '・ログアウト' : '職員ログイン'}
+        {staff ? staff.name + '・ログアウト' : 'Googleで編集ログイン'}
       </button>
       {staff?.role === 'admin' && <button
         type="button"
@@ -1110,7 +1095,7 @@ syncEditForm(refreshed.item);
                       <a className="underline" href="#resource-memo">更新メモ</a>
                     </nav>
                     {!staff && <>
-                      <p className="text-sm text-slate-700">必須情報を変更したり、メモを書いたりする場合は、ここで職員ログインしてください。</p>
+                      <p className="text-sm text-slate-700">基本情報の編集やメモの保存には、許可されたGoogleアカウントでログインしてください。</p>
                       {staffLoginForm}
                     </>}
                   </div>

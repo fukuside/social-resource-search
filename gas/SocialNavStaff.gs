@@ -3,7 +3,7 @@ function socialNavRead(request) {
   try {
     switch (params.action || 'search') {
       case 'ping':
-        return jsonOutput({ok: true, message: 'pong', version: 'public-memos-v1'});
+        return jsonOutput({ok: true, message: 'pong', version: 'google-staff-v1'});
       case 'publicUpdates':
         return jsonOutput(socialNavPublicUpdates_());
       case 'search': {
@@ -18,7 +18,7 @@ function socialNavRead(request) {
         return jsonOutput({ok: true, item: socialNavPublicResource_(result.item)});
       }
       case 'memoLogs':
-        return jsonOutput({ok: false, error: '職員ログインが必要です。'});
+        return jsonOutput({ok: false, error: 'Googleログインが必要です。'});
       default:
         return jsonOutput({ok: false, error: '利用できない操作です。'});
     }
@@ -30,9 +30,12 @@ function socialNavRead(request) {
 
 function socialNavWrite(request) {
   try {
-    const body = JSON.parse((request && request.postData && request.postData.contents) || '{}');
-    const staff = socialNavStaff_(body.accessCode);
-    if (!staff) return jsonOutput({ok: false, error: '職員コードを確認してください。'});
+    const verified = socialNavVerifiedRequest_(JSON.parse(request?.postData?.contents || '{}'));
+    if (!verified) return jsonOutput({ok: false, error: '編集権限のあるGoogleアカウントでログインしてください。'});
+    if (verified.enrollment) {
+      return jsonOutput({ok: false, error: '初回登録が必要です。本人確認のため、管理者へこの登録IDを伝えてください。\n' + verified.enrollment});
+    }
+    const {body, staff} = verified;
     if (body.action === 'staff') return jsonOutput({ok: true, staff});
     if (body.action === 'timeline') return jsonOutput(socialNavTimeline_(body.cursor));
     if (body.action === 'staffSearch') return jsonOutput(searchResources(body));
@@ -140,16 +143,38 @@ function socialNavWrite(request) {
   }
 }
 
-// Register SHA-256 digests of randomly generated individual codes in Script Properties.
-// Every entry has the form staff.<64 lowercase hex digits> = {"name":"職員名","role":"staff"}.
-function socialNavStaff_(code) {
-  if (typeof code !== 'string' || !/^[A-Za-z0-9_-]{32,128}$/.test(code)) return null;
-  const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, code, Utilities.Charset.UTF_8);
-  const digest = bytes.map(byte => ('0' + (byte & 255).toString(16)).slice(-2)).join('');
-  const value = PropertiesService.getScriptProperties().getProperty('staff.' + digest);
-  if (!value) return null;
-  const entry = JSON.parse(value);
-  if (typeof entry.name !== 'string' || !entry.name.trim() || !['staff', 'admin'].includes(entry.role)) return null;
+function socialNavVerifiedRequest_(envelope) {
+  const {signed, signature} = envelope || {};
+  if (typeof signed !== 'string' || typeof signature !== 'string' || !/^[0-9a-f]{64}$/.test(signature)) return null;
+  const properties = PropertiesService.getScriptProperties();
+  const key = properties.getProperty('SOCIAL_NAV_AUTH_SECRET');
+  if (!key || key.length < 43) return null;
+  const bytes = Utilities.computeHmacSha256Signature(signed, key, Utilities.Charset.UTF_8);
+  const expected = bytes.map(byte => ('0' + (byte & 255).toString(16)).slice(-2)).join('');
+  let differences = 0;
+  for (let i = 0; i < expected.length; i++) differences |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
+  if (differences) return null;
+
+  const {email, subject, googleHosted, name, issuedAt, payload} = JSON.parse(signed);
+  if (!Number.isFinite(issuedAt) || Math.abs(Date.now() - issuedAt) > 60000) return null;
+  if (typeof email !== 'string' || !/^[^@\s]+@[^@\s]+$/.test(email) || typeof payload?.action !== 'string') return null;
+  if (typeof subject !== 'string' || !/^[0-9a-f]{64}$/.test(subject)) return null;
+  const emailBytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, email, Utilities.Charset.UTF_8);
+  const emailHash = emailBytes.map(byte => ('0' + (byte & 255).toString(16)).slice(-2)).join('');
+  const defaults = JSON.parse(properties.getProperty('SOCIAL_NAV_STAFF_ROSTER') || '{}');
+  const explicit = properties.getProperty('staff.google.' + email);
+  const profile = explicit ? JSON.parse(explicit) : defaults[emailHash];
+  if (!profile || profile.role === 'disabled') return null;
+  if (profile.subject ? subject !== profile.subject : !googleHosted) {
+    return !profile.subject && payload.action === 'staff' ? {enrollment: subject} : null;
+  }
+  const googleName = typeof name === 'string' ? name.replace(/[\r\n]+/g, ' ').trim().slice(0, 80) : '';
+  const staff = socialNavStaffProfile_({...profile, name: profile.name || googleName || '資料担当'});
+  return staff ? {staff, body: payload} : null;
+}
+
+function socialNavStaffProfile_(entry) {
+  if (!entry || typeof entry.name !== 'string' || !entry.name.trim() || !['staff', 'admin'].includes(entry.role)) return null;
   const publicDisplayName = typeof entry.publicDisplayName === 'string'
     ? entry.publicDisplayName.replace(/[\r\n]+/g, ' ').trim().slice(0, 40)
     : '';

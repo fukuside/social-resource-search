@@ -6,16 +6,15 @@ const CONFIGURED_GAS_URL = EXPLICIT_GAS_URL
 const GAS_URL = CONFIGURED_GAS_URL || PRODUCTION_GAS_URL;
 
 async function request(action, params = {}, accessCode) {
-  const url = new URL(GAS_URL);
+  const url = new URL(accessCode === undefined ? GAS_URL : '/api/staff', window.location.origin);
   const options = { cache: 'no-store' };
   if (accessCode === undefined) {
     url.search = new URLSearchParams({ action, ...params });
   } else {
-    if (!CONFIGURED_GAS_URL) throw new Error('職員機能の接続先が設定されていません。');
-    if (!accessCode) throw new Error('職員コードを入力してください。');
+    if (!accessCode) throw new Error('Googleログインが必要です。');
     options.method = 'POST';
-    options.headers = { 'Content-Type': 'text/plain;charset=utf-8' };
-    options.body = JSON.stringify({ ...params, action, accessCode });
+    options.headers = { 'Content-Type': 'application/json' };
+    options.body = JSON.stringify({ credential: accessCode, payload: { ...params, action } });
   }
   const response = await fetch(url, options).catch(() => {
     throw new Error('GASに接続できませんでした。接続先URLとアクセス設定を確認してください。');
