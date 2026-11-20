@@ -3,7 +3,7 @@ function socialNavRead(request) {
   try {
     switch (params.action || 'search') {
       case 'ping':
-        return jsonOutput({ok: true, message: 'pong', version: 'public-edit-v1'});
+        return jsonOutput({ok: true, message: 'pong', version: 'deletion-feedback-v1'});
       case 'publicUpdates':
         return jsonOutput(socialNavPublicUpdates_());
       case 'search': {
@@ -308,7 +308,14 @@ function socialNavChangeDeletion_(body) {
     if (!file.isTrashed() && !socialNavInFolder_(file)) {
       return {ok: false, error: 'PDFが検索用フォルダーにありません。'};
     }
-    if (!file.isTrashed()) file.setTrashed(true);
+    if (!file.isTrashed()) {
+      try {
+        file.setTrashed(true);
+      } catch (error) {
+        console.error('Driveのゴミ箱へ移動できませんでした', error);
+        return {ok: false, error: 'DriveでPDFをゴミ箱へ移動できませんでした。PDFの所有者に確認するか、「PDFを残して検索対象外」を選んでください。'};
+      }
+    }
     values[0] = true;
     values[1] = values[1] || new Date();
     values[5] = 'drive';

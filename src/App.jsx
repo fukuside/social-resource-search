@@ -22,7 +22,6 @@ import { searchResources,
   updateResource,
   saveMemo,
   getStaff,
-  getTimeline,
   deleteResource,
   restoreResource,
   deleteMemoLog, } from './api';
@@ -222,11 +221,8 @@ export default function App() {
   const [accessCode, setAccessCode] = useState('');
   const [staff, setStaff] = useState(null);
   const [showStaffForm, setShowStaffForm] = useState(false);
-  const [showTimeline, setShowTimeline] = useState(false);
   const [publicUpdateRevision, setPublicUpdateRevision] = useState(0);
   const [showIntake, setShowIntake] = useState(false);
-  const [timelineEntries, setTimelineEntries] = useState([]);
-  const [timelineCursor, setTimelineCursor] = useState(null);
   const [staffBusy, setStaffBusy] = useState(false);
   const [staffError, setStaffError] = useState('');
   const [changingDeletion, setChangingDeletion] = useState(false);
@@ -289,38 +285,12 @@ export default function App() {
     setAccessCode('');
     setIsAdminMode(false);
     setShowChangeQueue(false);
-    setShowTimeline(false);
     setShowIntake(false);
-    setTimelineEntries([]);
-    setTimelineCursor(null);
     setStaffError('');
     setResources([]);
     setHasSearched(false);
     setSelectedResource(null);
     setMemo('');
-  };
-
-  const openTimeline = async (cursor) => {
-    if (!staff) {
-      setShowStaffForm(true);
-      return;
-    }
-    setShowTimeline(true);
-    setStaffBusy(true);
-    setStaffError('');
-    if (!cursor) {
-      setTimelineEntries([]);
-      setTimelineCursor(null);
-    }
-    try {
-      const result = await getTimeline(accessCode, cursor);
-      setTimelineEntries((entries) => cursor ? [...entries, ...result.entries] : result.entries);
-      setTimelineCursor(result.nextCursor);
-    } catch (err) {
-      setStaffError(err.message);
-    } finally {
-      setStaffBusy(false);
-    }
   };
 
   const loadResources = async () => {
@@ -467,9 +437,6 @@ const buildMapUrl = (resource) => {
     try {
       if (mode === 'restore') await restoreResource(fileId, accessCode);
       else await deleteResource(fileId, mode, accessCode);
-      if (mode !== 'restore') {
-        setTimelineEntries((entries) => entries.filter((entry) => entry.fileId !== fileId));
-      }
       setPublicUpdateRevision((revision) => revision + 1);
       if (hasSearched) await loadResources();
       await handleOpenDetail(fileId);
@@ -524,7 +491,6 @@ syncEditForm(refreshed.item);
   ...detail.item,
   memoLogs: detail.memoLogs || [],
 });
-    setTimelineEntries((entries) => entries.filter((entry) => entry.logId !== logId));
     setPublicUpdateRevision((revision) => revision + 1);
   } catch (error) {
     alert(error.message || '削除に失敗しました');
@@ -640,14 +606,6 @@ syncEditForm(refreshed.item);
         使い方マニュアル
       </a>
     
-      {staff && <button
-        type="button"
-        onClick={() => showTimeline ? setShowTimeline(false) : openTimeline()}
-        disabled={staffBusy}
-        className="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-bold"
-      >
-        職員タイムライン
-      </button>}
       <button
         type="button"
         onClick={openStaffLogin}
@@ -710,44 +668,6 @@ syncEditForm(refreshed.item);
 
       {showStaffForm && !staff && (
         <div className="mx-auto max-w-7xl px-4 py-3">{staffLoginForm}</div>
-      )}
-
-      {showTimeline && staff && (
-        <section aria-labelledby="timeline-heading" className="mx-auto max-w-7xl space-y-3 px-4 py-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <h2 id="timeline-heading" className="text-xl font-bold">タイムライン</h2>
-            <button type="button" disabled={staffBusy} onClick={() => openTimeline()} className="rounded-xl border px-3 py-1">
-              最新を取得
-            </button>
-          </div>
-          {staffError && <p role="alert" className="text-red-700">{staffError}</p>}
-          {staffBusy && <p role="status">読み込み中…</p>}
-          {!staffBusy && !staffError && timelineEntries.length === 0 && <p>更新メモはありません。</p>}
-          <ol className="max-h-[60vh] space-y-3 overflow-y-auto">
-            {timelineEntries.map((entry) => (
-              <li key={entry.logId} className="rounded-2xl border bg-white p-4">
-                <time dateTime={entry.createdAt} className="text-sm text-slate-600">{memoDate(entry.createdAt)}</time>
-                <div>
-                  <button type="button" className="font-bold text-blue-700 underline" onClick={() => {
-                    setShowTimeline(false);
-                    handleOpenDetail(entry.fileId);
-                  }}>
-                    {entry.businessName || '事業所詳細を開く'}
-                  </button>
-                </div>
-                <p className="text-sm text-slate-600">{[entry.area, entry.serviceType].filter(Boolean).join('／')}</p>
-                <p className="mt-2 text-xs font-bold text-slate-600">
-                  {{ memo: '更新メモ', support: '情報メモ', registered: 'PDF登録', replaced: 'PDF差し替え' }[entry.type]}
-                </p>
-                <p className="mb-2 whitespace-pre-wrap break-words">{entry.memo}</p>
-                <p className="text-sm">入力者：{memoAuthor(entry.createdBy)}</p>
-              </li>
-            ))}
-          </ol>
-          {timelineCursor && <button type="button" disabled={staffBusy} onClick={() => openTimeline(timelineCursor)} className="rounded-xl border px-4 py-2">
-            さらに表示
-          </button>}
-        </section>
       )}
 
       <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6 xl:h-[calc(100vh-96px)] xl:grid-cols-[0.85fr_1fr_1.05fr]">

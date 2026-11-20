@@ -46,6 +46,7 @@ const publicSheet = () => ({
   }),
 });
 let isTrashed = false;
+let trashDenied = false;
 let responseCount = 0;
 let rowPresent = true;
 const queue = { data: [[fileId, '未整理.pdf', 'review', 'digest', '{}', '', new Date(), 1, '']] };
@@ -56,7 +57,7 @@ let shouldFailMove = false;
 let rangeWrites = 0;
 const file = {
   isTrashed: () => isTrashed,
-  setTrashed: (value) => { isTrashed = value; },
+  setTrashed: (value) => { if (value && trashDenied) throw new Error('Drive access denied'); isTrashed = value; },
   getMimeType: () => 'pdf',
   getParents: () => iterator([{ getId: () => parentId }]),
   getName: () => fileName,
@@ -232,6 +233,13 @@ assert.equal(publicWrite('requestResourceChange', { fileId, kind: 'delete', reas
 const deletion = request('listResourceChangeRequests', adminEmail).entries[0];
 assert.equal(deletion.requestedBy, '一般利用者');
 assert.equal(request('resolveResourceChangeRequest', staffEmail, { requestId: deletion.requestId, resolution: 'search' }).ok, false);
+trashDenied = true;
+const denied = request('resolveResourceChangeRequest', adminEmail, { requestId: deletion.requestId, resolution: 'drive' });
+assert.equal(denied.ok, false);
+assert.match(denied.error, /PDFを残して検索対象外/);
+assert.equal(request('listResourceChangeRequests', adminEmail).total, 1);
+assert.equal(isTrashed, false);
+trashDenied = false;
 assert.equal(request('resolveResourceChangeRequest', adminEmail, { requestId: deletion.requestId, resolution: 'search' }).ok, true);
 assert.equal(status[0], true);
 assert.equal(request('restoreResource', adminEmail, { fileId }).ok, true);
