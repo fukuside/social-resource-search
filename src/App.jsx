@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import logo from './assets/logo2.png';
 import IntakePanel from './IntakePanel';
 import { ResourceChangeForm, ResourceChangeQueue } from './ResourceChange';
+import { PublicUpdateFeed, PublicUpdateForm } from './PublicUpdates';
 import {
   Search,
   MapPin,
@@ -221,6 +222,7 @@ export default function App() {
   const [staff, setStaff] = useState(null);
   const [showStaffForm, setShowStaffForm] = useState(false);
   const [showTimeline, setShowTimeline] = useState(false);
+  const [publicUpdateRevision, setPublicUpdateRevision] = useState(0);
   const [showIntake, setShowIntake] = useState(false);
   const [timelineEntries, setTimelineEntries] = useState([]);
   const [timelineCursor, setTimelineCursor] = useState(null);
@@ -272,6 +274,7 @@ export default function App() {
       const result = await getStaff(accessCode);
       setStaff(result.staff);
       setShowStaffForm(false);
+      if (selectedResource) await handleOpenDetail(selectedResource.fileId, accessCode);
     } catch (err) {
       setStaffError(err.message);
     } finally {
@@ -289,6 +292,10 @@ export default function App() {
     setTimelineEntries([]);
     setTimelineCursor(null);
     setStaffError('');
+    setResources([]);
+    setHasSearched(false);
+    setSelectedResource(null);
+    setMemo('');
   };
 
   const openTimeline = async (cursor) => {
@@ -324,7 +331,7 @@ export default function App() {
         serviceType: selectedType,
         consultationType: selectedConsultationType,
         includeDeleted,
-      });
+      }, staff ? accessCode : undefined);
 
       const results = data.results || [];
       const filteredResults = selectedConsultationType === 'すべて'
@@ -427,11 +434,11 @@ const buildMapUrl = (resource) => {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 };
 
-  const handleOpenDetail = async (fileId) => {
+  const handleOpenDetail = async (fileId, code = staff ? accessCode : undefined) => {
     try {
       setDetailLoading(true);
       setError('');
-      const detail = await getResourceDetail(fileId);
+      const detail = await getResourceDetail(fileId, code);
       setSelectedResource({
         ...detail.item,
         memoLogs: detail.memoLogs || []
@@ -461,6 +468,7 @@ const buildMapUrl = (resource) => {
       if (mode !== 'restore') {
         setTimelineEntries((entries) => entries.filter((entry) => entry.fileId !== fileId));
       }
+      setPublicUpdateRevision((revision) => revision + 1);
       if (hasSearched) await loadResources();
       await handleOpenDetail(fileId);
     } catch (err) {
@@ -481,7 +489,7 @@ const buildMapUrl = (resource) => {
         throw new Error(result.error || 'メモ保存に失敗しました');
       }
 
-      const refreshed = await getResourceDetail(selectedResource.fileId);
+      const refreshed = await getResourceDetail(selectedResource.fileId, accessCode);
 setSelectedResource({
   ...refreshed.item,
   memoLogs: refreshed.memoLogs || [],
@@ -507,7 +515,7 @@ syncEditForm(refreshed.item);
       return;
     }
 
-    const detail = await getResourceDetail(result.fileId);
+    const detail = await getResourceDetail(result.fileId, accessCode);
 
     setSelectedResource({
   ...detail.item,
@@ -558,7 +566,7 @@ syncEditForm(refreshed.item);
         throw new Error(result.error || '情報更新に失敗しました');
       }
 
-      const refreshed = await getResourceDetail(selectedResource.fileId);
+      const refreshed = await getResourceDetail(selectedResource.fileId, accessCode);
 setSelectedResource({
   ...refreshed.item,
   memoLogs: refreshed.memoLogs || [],
@@ -615,14 +623,14 @@ syncEditForm(refreshed.item);
         使い方マニュアル
       </a>
     
-      <button
+      {staff && <button
         type="button"
         onClick={() => showTimeline ? setShowTimeline(false) : openTimeline()}
         disabled={staffBusy}
         className="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-bold"
       >
-        タイムライン
-      </button>
+        職員タイムライン
+      </button>}
       <button
         type="button"
         onClick={() => staff ? signOut() : setShowStaffForm((visible) => !visible)}
@@ -670,6 +678,7 @@ syncEditForm(refreshed.item);
       {showChangeQueue && isAdminMode && (
         <ResourceChangeQueue accessCode={accessCode} onClose={() => setShowChangeQueue(false)}
           onChanged={async () => {
+            setPublicUpdateRevision((revision) => revision + 1);
             if (hasSearched) await loadResources();
             if (selectedResource) await handleOpenDetail(selectedResource.fileId);
           }} />
@@ -739,7 +748,7 @@ syncEditForm(refreshed.item);
 
       <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6 xl:h-[calc(100vh-96px)] xl:grid-cols-[0.85fr_1fr_1.05fr]">
   {/* 左：検索条件 */}
-  <section className="min-h-0 overflow-y-auto xl:pr-2">
+  <section className="flex min-h-0 flex-col gap-4 overflow-y-auto xl:pr-2">
     <div className="rounded-[2rem] border bg-white p-6 shadow-sm">
       <div className="mb-4 flex items-center gap-3">
         <Search className="h-5 w-5 text-slate-400" />
@@ -861,6 +870,13 @@ syncEditForm(refreshed.item);
           検索する
         </button>
       </div>
+    </div>
+    <div className="xl:order-first">
+      <PublicUpdateFeed revision={publicUpdateRevision} adminCode={isAdminMode ? accessCode : ''}
+        onOpenDetail={(fileId) => {
+          handleOpenDetail(fileId);
+          document.getElementById('resource-detail')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }} />
     </div>
   </section>
 
@@ -984,7 +1000,7 @@ syncEditForm(refreshed.item);
                 </div>
               )}
 
-              {res.memo && (
+              {staff && res.memo && (
                 <div className="mt-3 rounded-2xl bg-white px-3 py-2 text-xs leading-relaxed text-slate-600 ring-1 ring-slate-200">
                   <span className="font-black text-slate-500">最新メモ：</span>
                   <span className="whitespace-pre-wrap break-words">{res.memo}</span>
@@ -997,7 +1013,7 @@ syncEditForm(refreshed.item);
     </div>
   </section>
         
-        <section className="min-h-0 overflow-y-auto xl:pr-2">
+        <section id="resource-detail" className="min-h-0 scroll-mt-36 overflow-y-auto xl:pr-2">
           <div className="rounded-[2rem] border bg-white p-6 shadow-sm min-h-[600px] lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
             <div className="mb-4 flex items-center gap-3">
               <FolderOpen className="h-5 w-5 text-slate-400" />
@@ -1090,6 +1106,11 @@ syncEditForm(refreshed.item);
 
                 {staff && !resourceDeleted && (
                   <ResourceChangeForm key={selectedResource.fileId} fileId={selectedResource.fileId} accessCode={accessCode} />
+                )}
+
+                {staff && !resourceDeleted && (
+                  <PublicUpdateForm key={selectedResource.fileId} fileId={selectedResource.fileId} accessCode={accessCode}
+                    onPublished={() => setPublicUpdateRevision((revision) => revision + 1)} />
                 )}
 
                 {staff && !resourceDeleted && (

@@ -3,15 +3,22 @@ function socialNavRead(request) {
   try {
     switch (params.action || 'search') {
       case 'ping':
-        return jsonOutput({ok: true, message: 'pong', version: 'staff-timeline-v1'});
-      case 'search':
-        return jsonOutput(searchResources(params));
+        return jsonOutput({ok: true, message: 'pong', version: 'public-updates-v1'});
+      case 'publicUpdates':
+        return jsonOutput(socialNavPublicUpdates_());
+      case 'search': {
+        const result = searchResources(params, false);
+        return jsonOutput({...result, results: result.results.map(socialNavPublicResource_)});
+      }
       case 'detail': {
         const result = getResource(params.fileId);
-        return jsonOutput(result.item?.deletionReason === 'intake' ? {ok: false, error: '登録処理中です。'} : result);
+        if (!result.ok || result.item?.deletionReason === 'intake') {
+          return jsonOutput({ok: false, error: '資料が見つかりません。'});
+        }
+        return jsonOutput({ok: true, item: socialNavPublicResource_(result.item)});
       }
       case 'memoLogs':
-        return jsonOutput(getMemoLogs(params.fileId));
+        return jsonOutput({ok: false, error: '職員ログインが必要です。'});
       default:
         return jsonOutput({ok: false, error: '利用できない操作です。'});
     }
@@ -28,7 +35,12 @@ function socialNavWrite(request) {
     if (!staff) return jsonOutput({ok: false, error: '職員コードを確認してください。'});
     if (body.action === 'staff') return jsonOutput({ok: true, staff});
     if (body.action === 'timeline') return jsonOutput(socialNavTimeline_(body.cursor));
-    const staffActions = ['saveMemo', 'updateResource', 'requestResourceChange'];
+    if (body.action === 'staffSearch') return jsonOutput(searchResources(body));
+    if (body.action === 'staffDetail') {
+      const result = getResource(body.fileId);
+      return jsonOutput(result.item?.deletionReason === 'intake' ? {ok: false, error: '登録処理中です。'} : result);
+    }
+    const staffActions = ['saveMemo', 'updateResource', 'requestResourceChange', 'publishPublicUpdate'];
     if (staff.role !== 'admin' && !staffActions.includes(body.action)) {
       return jsonOutput({ok: false, error: '管理者権限が必要です。'});
     }
@@ -38,6 +50,10 @@ function socialNavWrite(request) {
     try {
       ensureHeader();
       switch (body.action) {
+        case 'publishPublicUpdate':
+          return jsonOutput(socialNavPublishUpdate_(body, staff));
+        case 'hidePublicUpdate':
+          return jsonOutput(socialNavHideUpdate_(body.updateId));
         case 'requestResourceChange':
           return jsonOutput(socialNavRequestChange_(body, staff));
         case 'listResourceChangeRequests':
@@ -318,4 +334,84 @@ function socialNavResolveChange_(body, staff) {
   }
   data.sheet.getRange(index + 2, 9, 1, 3).setValues([[status, socialNavSheetText_(staff.name), new Date()]]);
   return {ok:true};
+}
+
+const SOCIAL_NAV_PUBLIC_UPDATE_HEADERS = [
+  'updateId', 'fileId', 'message', 'displayName', 'publishedAt', 'publishedBy', 'isHidden',
+];
+
+function socialNavPublicResource_(resource) {
+  const publicResource = {...resource};
+  delete publicResource.memo;
+  return publicResource;
+}
+
+function socialNavPublicUpdateSheet_(create) {
+  const book = SpreadsheetApp.openById(SHEET_ID);
+  let sheet = book.getSheetByName('public_updates');
+  if (!sheet && create) {
+    sheet = book.insertSheet('public_updates');
+    sheet.appendRow(SOCIAL_NAV_PUBLIC_UPDATE_HEADERS);
+  }
+  if (!sheet) return null;
+  const header = sheet.getRange(1, 1, 1, SOCIAL_NAV_PUBLIC_UPDATE_HEADERS.length).getValues()[0];
+  if (SOCIAL_NAV_PUBLIC_UPDATE_HEADERS.some((value, index) => header[index] !== value)) {
+    throw new Error('公開更新シートのヘッダーが一致しません。');
+  }
+  return sheet;
+}
+
+function socialNavPublicUpdates_() {
+  const sheet = socialNavPublicUpdateSheet_(false);
+  if (!sheet || sheet.getLastRow() < 2) return {ok: true, entries: []};
+  const resources = getSheet().getDataRange().getValues();
+  const byId = new Map(resources.slice(1).map(row => [String(row[0]), rowToObject(resources[0], row)]));
+  const entries = [];
+  for (let end = sheet.getLastRow(); end >= 2 && entries.length < 5; end -= 100) {
+    const start = Math.max(2, end - 99);
+    const values = sheet.getRange(start, 1, end - start + 1, SOCIAL_NAV_PUBLIC_UPDATE_HEADERS.length).getValues();
+    for (const [updateId, fileId, message, displayName, publishedAt, , isHidden] of values.reverse()) {
+      const resource = byId.get(String(fileId));
+      if (!updateId || !resource || socialNavDeleted_(resource) || String(isHidden).toLowerCase() === 'true') continue;
+      entries.push({updateId, fileId, message, displayName, publishedAt, businessName: resource.businessName || resource.fileName});
+      if (entries.length === 5) break;
+    }
+  }
+  return {ok: true, entries};
+}
+
+function socialNavPublishUpdate_(body, staff) {
+  const resource = getResource(body.fileId);
+  if (!resource.ok || socialNavDeleted_(resource.item)) return {ok: false, error: '公開できる資料が見つかりません。'};
+  const message = typeof body.message === 'string' ? body.message.trim() : '';
+  const displayName = typeof body.displayName === 'string' ? body.displayName.trim() : '';
+  if (!message || message.length > 160 || !displayName || displayName.length > 40 || /[\r\n]/.test(displayName)) {
+    return {ok: false, error: '公開文は160文字以内、公開表示名は40文字以内で入力してください。'};
+  }
+  const sheet = socialNavPublicUpdateSheet_(true);
+  const last = sheet.getLastRow();
+  if (last > 1) {
+    const previous = sheet.getRange(last, 1, 1, SOCIAL_NAV_PUBLIC_UPDATE_HEADERS.length).getValues()[0];
+    const [id, fileId, text, name, publishedAt, publishedBy, isHidden] = previous;
+    if (id && String(fileId) === String(body.fileId) && text === message && name === displayName &&
+        publishedBy === staff.name && String(isHidden).toLowerCase() !== 'true' &&
+        Date.now() - new Date(publishedAt).getTime() < 60000) return {ok: true};
+  }
+  sheet.appendRow([
+    Utilities.getUuid(), String(body.fileId), socialNavSheetText_(message), socialNavSheetText_(displayName),
+    new Date(), socialNavSheetText_(staff.name), false,
+  ]);
+  return {ok: true};
+}
+
+function socialNavHideUpdate_(updateId) {
+  const sheet = socialNavPublicUpdateSheet_(false);
+  if (!sheet || sheet.getLastRow() < 2 || typeof updateId !== 'string' || !updateId.trim()) {
+    return {ok: false, error: '公開更新が見つかりません。'};
+  }
+  const range = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1);
+  const match = range.createTextFinder(updateId).matchEntireCell(true).matchCase(true).findNext();
+  if (!match) return {ok: false, error: '公開更新が見つかりません。'};
+  sheet.getRange(match.getRow(), 7).setValue(true);
+  return {ok: true};
 }

@@ -28,8 +28,15 @@ async function request(action, params = {}, accessCode) {
   return data;
 }
 
-export const searchResources = (params) => request('search', params);
-export const getResourceDetail = (fileId) => request('detail', { fileId });
+export const searchResources = (params, accessCode) =>
+  request(accessCode ? 'staffSearch' : 'search', params, accessCode || undefined);
+export const getResourceDetail = (fileId, accessCode) =>
+  request(accessCode ? 'staffDetail' : 'detail', { fileId }, accessCode || undefined);
+export const getPublicUpdates = () => request('publicUpdates');
+export const publishPublicUpdate = (fileId, fields, accessCode) =>
+  request('publishPublicUpdate', { fileId, ...fields }, accessCode);
+export const hidePublicUpdate = (updateId, accessCode) =>
+  request('hidePublicUpdate', { updateId }, accessCode);
 export const getStaff = (accessCode) => request('staff', {}, accessCode);
 export const getTimeline = (accessCode, cursor) => request('timeline', { cursor }, accessCode);
 export const updateResource = (payload, accessCode) => request('updateResource', payload, accessCode);

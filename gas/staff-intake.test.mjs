@@ -19,6 +19,24 @@ const status = [false, '', '06-1234-5678', '守口市', '目的語', ''];
 let memoAuthor = '';
 let savedResource;
 const changeRows = [];
+let publicRows;
+let generatedId = 0;
+const publicSheet = () => ({
+  getLastRow: () => publicRows.length,
+  appendRow: (row) => publicRows.push(Array.from(row)),
+  getRange: (row, column, height) => ({
+    getValues: () => publicRows.slice(row - 1, row - 1 + height),
+    setValue: (value) => { publicRows[row - 1][column - 1] = value; },
+    createTextFinder: (id) => ({
+      matchEntireCell() { return this; },
+      matchCase() { return this; },
+      findNext: () => {
+        const index = publicRows.findIndex((entry) => entry[0] === id);
+        return index < 1 ? null : { getRow: () => index + 1 };
+      },
+    }),
+  }),
+});
 let isTrashed = false;
 let responseCount = 0;
 let rowPresent = true;
@@ -69,14 +87,17 @@ const context = createContext({
     DigestAlgorithm: { SHA_256: 'sha256' },
     Charset: { UTF_8: 'utf8' },
     computeDigest: (algorithm, code) => [...Buffer.from(digest(code), 'hex')],
-    getUuid: () => 'request-' + changeRows.length,
+    getUuid: () => 'test-id-' + (++generatedId),
   },
   PropertiesService: { getScriptProperties: () => ({ getProperty: (key) => staffEntries.get(key) }) },
   LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
   SpreadsheetApp: {
     flush() {},
     openById: () => ({
-      getSheetByName: () => ({
+      insertSheet: () => { publicRows = []; return publicSheet(); },
+      getSheetByName: (name) => name === 'public_updates'
+        ? (publicRows ? publicSheet() : null)
+        : ({
         getLastRow: () => changeRows.length,
         appendRow: (row) => changeRows.push(Array.from(row)),
         getRange: (row, column, height) => ({
@@ -97,7 +118,10 @@ const context = createContext({
     getRange: (first, col, length) => ({ getValues: () => logs.slice(first - 2, first - 2 + length) }),
   }),
   rowToObject: (headers, row) => Object.fromEntries(headers.map((key, i) => [key, row[i]])),
-  getResource: () => ({ ok: true, item: { isDeleted: status[0] } }),
+  getResource: () => ({ ok: true, item: { isDeleted: status[0], memo: '内部メモ', businessName: '操作例' }, memoLogs: logs }),
+  searchResources: (params, includeStaffMemos = true) => ({
+    ok: true, results: params.q && !includeStaffMemos ? [] : [{ fileId, memo: '内部メモ' }],
+  }),
   saveMemoLog: (id, memo, name) => { memoAuthor = name; return { ok: true }; },
   updateResource: (body) => { savedResource = body; return { ok: true }; },
   buildManagedFileName: (area, service, name) => [area, service, name].join('_') + '.pdf',
@@ -112,6 +136,28 @@ const request = (action, accessCode, extras = {}) => context.socialNavWrite({
 });
 assert.equal(context.socialNavRead({ parameter: { action: 'sync' } }).ok, false);
 assert.equal(context.socialNavRead({ parameter: { action: 'updateResource' } }).ok, false);
+const read = (action, params = {}) => context.socialNavRead({ parameter: { action, ...params } });
+assert.equal(read('memoLogs', { fileId }).ok, false);
+assert.equal(read('detail', { fileId }).item.memo, undefined);
+assert.equal(read('detail', { fileId }).memoLogs, undefined);
+assert.equal(read('search').results[0].memo, undefined);
+assert.equal(read('search', { q: '内部メモ' }).results.length, 0);
+assert.equal(request('staffSearch', staffCode, { q: '内部メモ' }).results[0].memo, '内部メモ');
+assert.equal(request('staffDetail', staffCode, { fileId }).item.memo, '内部メモ');
+assert.equal(read('publicUpdates').entries.length, 0);
+assert.equal(publicRows, undefined);
+assert.equal(request('publishPublicUpdate', 'wrong', { fileId, message: '新版です', displayName: '担当窓口' }).ok, false);
+assert.equal(request('publishPublicUpdate', staffCode, { fileId, message: '新版です' }).ok, false);
+assert.equal(request('publishPublicUpdate', staffCode, { fileId, message: '新版です', displayName: '担当窓口' }).ok, true);
+assert.equal(request('publishPublicUpdate', staffCode, { fileId, message: '新版です', displayName: '担当窓口' }).ok, true);
+const feed = read('publicUpdates').entries;
+assert.equal(feed.length, 1);
+assert.equal(feed[0].displayName, '担当窓口');
+assert.equal(feed[0].publishedBy, undefined);
+assert.equal(publicRows[1][5], '閲覧担当');
+assert.equal(request('hidePublicUpdate', staffCode, { updateId: feed[0].updateId }).ok, false);
+assert.equal(request('hidePublicUpdate', adminCode, { updateId: feed[0].updateId }).ok, true);
+assert.equal(read('publicUpdates').entries.length, 0);
 assert.equal(request('deleteResource', 'wrong', { fileId, mode: 'search' }).ok, false);
 assert.equal(request('deleteResource', staffCode, { fileId, mode: 'search' }).ok, false);
 assert.equal(rangeWrites, 0);

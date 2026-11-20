@@ -65,6 +65,9 @@ change('for (const [fileId, existing] of existingMap.entries()) {\n', `for (cons
 `);
 
 change('      // 削除済みPDFは検索結果から除外', '      if (item.deletionReason === "intake") return false;\n      // 削除済みPDFは検索結果から除外');
+change('function searchResources(params) {', 'function searchResources(params, includeStaffMemos = true) {');
+change('  const memoLogMap = buildMemoLogMap();', '  const memoLogMap = includeStaffMemos ? buildMemoLogMap() : new Map();');
+change('        item.memo,', '        includeStaffMemos ? item.memo : "",');
 
 for (const [key, value] of [['SHEET_ID', testSheetId], ['FOLDER_ID', testFolderId]]) {
   if (!/^[A-Za-z0-9_-]{12,}$/.test(value)) throw new Error(key + ' の検証用IDを確認してください。');
