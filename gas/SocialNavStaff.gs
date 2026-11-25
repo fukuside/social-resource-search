@@ -3,7 +3,7 @@ function socialNavRead(request) {
   try {
     switch (params.action || 'search') {
       case 'ping':
-        return jsonOutput({ok: true, message: 'pong', version: 'public-memo-list-v1'});
+        return jsonOutput({ok: true, message: 'pong', version: 'public-information-notes-v1'});
       case 'publicUpdates':
         return jsonOutput(socialNavPublicUpdates_());
       case 'search': {
@@ -11,6 +11,7 @@ function socialNavRead(request) {
         const latestMemos = socialNavLatestPublicMemos_(result.results);
         return jsonOutput({...result, results: result.results.map(resource => ({
           ...socialNavPublicResource_(resource),
+          supportNotes: String(resource.supportNotes || ''),
           latestUpdateMemo: latestMemos.get(String(resource.fileId)) || '',
         }))});
       }

@@ -130,7 +130,7 @@ const context = createContext({
   rowToObject: (headers, row) => Object.fromEntries(headers.map((key, i) => [key, row[i]])),
   getResource: () => ({ ok: true, item: { isDeleted: status[0], memo: '内部メモ', supportNotes: '以前の情報メモ', businessName: '操作例' }, memoLogs: logs }),
   searchResources: (params, includeStaffMemos = true) => ({
-    ok: true, results: params.q && !includeStaffMemos ? [] : [{ fileId, memo: '内部メモ' }],
+    ok: true, results: params.q && !includeStaffMemos ? [] : [{ fileId, memo: '内部メモ', supportNotes: '送迎は要相談' }],
   }),
   saveMemoLog: (id, memo, name) => { memoAuthor = name; return { ok: true, logId: 'memo-' + (++generatedId), item: { memoLogs: logs } }; },
   updateResource: (body) => { savedResource = body; return { ok: true, item: { memoLogs: logs } }; },
@@ -168,6 +168,7 @@ assert.equal(read('memoLogs', { fileId }).ok, false);
 assert.equal(read('detail', { fileId }).item.memo, undefined);
 assert.equal(read('detail', { fileId }).memoLogs.length, 0);
 assert.equal(read('search').results[0].memo, undefined);
+assert.equal(read('search').results[0].supportNotes, '送迎は要相談');
 assert.equal(read('search', { q: '内部メモ' }).results.length, 0);
 assert.equal(request('staffSearch', adminEmail, { q: '内部メモ' }).results[0].memo, '内部メモ');
 assert.equal(request('staffDetail', adminEmail, { fileId }).item.memo, '内部メモ');
