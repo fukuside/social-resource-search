@@ -1292,7 +1292,7 @@ syncEditForm(refreshed.item);
                       {savingMemo ? '保存中...' : 'メモを履歴保存'}
                       </button>
 
-                    {staff && <div className="space-y-3 pt-2">
+                    <div className="space-y-3 pt-2">
                       {(selectedResource.memoLogs || []).length === 0 ? (
                         <p className="text-sm text-slate-400">メモ履歴はまだありません</p>
                       ) : (
@@ -1322,7 +1322,7 @@ syncEditForm(refreshed.item);
   </div>
 ))
                       )}
-                    </div>}
+                    </div>
                   </fieldset>
                 </div>
                 )}

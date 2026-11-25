@@ -3,7 +3,7 @@ function socialNavRead(request) {
   try {
     switch (params.action || 'search') {
       case 'ping':
-        return jsonOutput({ok: true, message: 'pong', version: 'deletion-feedback-v1'});
+        return jsonOutput({ok: true, message: 'pong', version: 'public-memo-detail-v1'});
       case 'publicUpdates':
         return jsonOutput(socialNavPublicUpdates_());
       case 'search': {
@@ -15,7 +15,9 @@ function socialNavRead(request) {
         if (!result.ok || result.item?.deletionReason === 'intake') {
           return jsonOutput({ok: false, error: '資料が見つかりません。'});
         }
-        return jsonOutput({ok: true, item: socialNavPublicResource_(result.item)});
+        const memoLogs = socialNavDeleted_(result.item) ? [] : socialNavPublicUpdates_(String(params.fileId)).entries
+          .map(entry => ({logId: entry.updateId, memo: entry.message, createdAt: entry.publishedAt, createdBy: entry.displayName}));
+        return jsonOutput({ok: true, item: socialNavPublicResource_(result.item), memoLogs});
       }
       case 'memoLogs':
         return jsonOutput({ok: false, error: 'Googleログインが必要です。'});
@@ -465,20 +467,22 @@ function socialNavRecordActivity_(type, fileId, actor, sourceId, staffMessage, p
   ]);
 }
 
-function socialNavPublicUpdates_() {
+function socialNavPublicUpdates_(memoFileId) {
   const sheet = socialNavPublicUpdateSheet_(false);
   if (!sheet || sheet.getLastRow() < 2) return {ok: true, entries: []};
   const resources = getSheet().getDataRange().getValues();
   const byId = new Map(resources.slice(1).map(row => [String(row[0]), rowToObject(resources[0], row)]));
   const entries = [];
-  for (let end = sheet.getLastRow(); end >= 2 && entries.length < 5; end -= 100) {
+  const limit = memoFileId ? Infinity : 5;
+  for (let end = sheet.getLastRow(); end >= 2 && entries.length < limit; end -= 100) {
     const start = Math.max(2, end - 99);
     const values = sheet.getRange(start, 1, end - start + 1, SOCIAL_NAV_PUBLIC_UPDATE_HEADERS.length).getValues();
     for (const [updateId, fileId, message, displayName, publishedAt, , isHidden] of values.reverse()) {
       const resource = byId.get(String(fileId));
+      if (memoFileId && (String(fileId) !== memoFileId || !String(updateId).startsWith('memo:'))) continue;
       if (!updateId || !resource || socialNavDeleted_(resource) || String(isHidden).toLowerCase() === 'true') continue;
       entries.push({updateId, fileId, message, displayName, publishedAt, businessName: resource.businessName || resource.fileName});
-      if (entries.length === 5) break;
+      if (entries.length === limit) break;
     }
   }
   return {ok: true, entries};
