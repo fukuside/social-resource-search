@@ -217,6 +217,7 @@ const publicMemo = publicWrite('saveMemo', { fileId, memo: '職員のメモ' });
 assert.equal(publicMemo.ok, true);
 assert.equal(publicMemo.item, undefined);
 assert(read('detail', { fileId }).memoLogs.some(log => log.memo === '職員のメモ'));
+assert.equal(read('search').results[0].latestUpdateMemo, '職員のメモ');
 assert(!read('detail', { fileId }).memoLogs.some(log => log.memo === 'メモ0'));
 assert.equal(publicWrite('deleteResource', { fileId, mode: 'search' }).ok, false);
 assert.equal(publicWrite('deleteMemoLog', { logId: publicMemo.logId }).ok, false);

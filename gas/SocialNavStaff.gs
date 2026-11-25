@@ -3,12 +3,16 @@ function socialNavRead(request) {
   try {
     switch (params.action || 'search') {
       case 'ping':
-        return jsonOutput({ok: true, message: 'pong', version: 'public-memo-detail-v1'});
+        return jsonOutput({ok: true, message: 'pong', version: 'public-memo-list-v1'});
       case 'publicUpdates':
         return jsonOutput(socialNavPublicUpdates_());
       case 'search': {
         const result = searchResources(params, false);
-        return jsonOutput({...result, results: result.results.map(socialNavPublicResource_)});
+        const latestMemos = socialNavLatestPublicMemos_(result.results);
+        return jsonOutput({...result, results: result.results.map(resource => ({
+          ...socialNavPublicResource_(resource),
+          latestUpdateMemo: latestMemos.get(String(resource.fileId)) || '',
+        }))});
       }
       case 'detail': {
         const result = getResource(params.fileId);
@@ -465,6 +469,21 @@ function socialNavRecordActivity_(type, fileId, actor, sourceId, staffMessage, p
     socialNavSheetText_(publicDisplayName || '資料担当'), new Date(),
     socialNavSheetText_(actor), false, socialNavSheetText_(staffMessage),
   ]);
+}
+
+function socialNavLatestPublicMemos_(resources) {
+  const latest = new Map();
+  const activeIds = new Set(resources.filter(item => !socialNavDeleted_(item)).map(item => String(item.fileId)));
+  const sheet = activeIds.size && socialNavPublicUpdateSheet_(false);
+  if (!sheet || sheet.getLastRow() < 2) return latest;
+  const rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, SOCIAL_NAV_PUBLIC_UPDATE_HEADERS.length).getValues();
+  for (const [updateId, fileId, message, , , , isHidden] of rows.reverse()) {
+    const id = String(fileId);
+    if (!activeIds.has(id) || latest.has(id) || !String(updateId).startsWith('memo:') ||
+        String(isHidden).toLowerCase() === 'true' || !message) continue;
+    latest.set(id, message);
+  }
+  return latest;
 }
 
 function socialNavPublicUpdates_(memoFileId) {

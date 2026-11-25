@@ -887,7 +887,8 @@ syncEditForm(refreshed.item);
                   {(parseCommaValues(res.supportFlags).length > 0 || parseSupportNotes(res.supportNotes).length > 0) && (
                     <div className="mt-3 space-y-2">
                       {parseCommaValues(res.supportFlags).length > 0 && (
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs font-bold text-emerald-800">必須情報：</span>
                           {parseCommaValues(res.supportFlags).map((label) => (
                             <span
                               key={`flag-${label}`}
@@ -900,17 +901,24 @@ syncEditForm(refreshed.item);
                       )}
 
                       {parseSupportNotes(res.supportNotes).length > 0 && (
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs font-bold text-amber-800">情報メモ：</span>
                           {parseSupportNotes(res.supportNotes).map((label, index) => (
                             <span
                               key={`note-${index}-${label}`}
                               className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800 shadow-sm ring-1 ring-amber-200"
                             >
-                              メモ：{label}
+                              {label}
                             </span>
                           ))}
                         </div>
                       )}
+                    </div>
+                  )}
+                  {(staff ? res.memo : res.latestUpdateMemo) && (
+                    <div className="mt-3 rounded-xl bg-violet-50 px-3 py-2 text-xs leading-relaxed text-violet-900 ring-1 ring-violet-200">
+                      <span className="font-bold">メモ：</span>
+                      <span className="whitespace-pre-wrap break-words">{staff ? res.memo : res.latestUpdateMemo}</span>
                     </div>
                   )}
                 </div>
@@ -924,12 +932,6 @@ syncEditForm(refreshed.item);
                 </div>
               )}
 
-              {staff && res.memo && (
-                <div className="mt-3 rounded-2xl bg-white px-3 py-2 text-xs leading-relaxed text-slate-600 ring-1 ring-slate-200">
-                  <span className="font-black text-slate-500">最新メモ：</span>
-                  <span className="whitespace-pre-wrap break-words">{res.memo}</span>
-                </div>
-              )}
             </button>
           ))}
         </div>
