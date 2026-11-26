@@ -351,17 +351,8 @@ const handleReset = () => {
   setEditSupportFlags(String(detail.supportFlags ?? ''));
   setRenameDriveFile(false);
 
-  const notes = String(detail.supportNotes || '')
-    .split('｜')
-    .map(v => v.trim());
-
-  setEditSupportNotes([
-    notes[0] || '',
-    notes[1] || '',
-    notes[2] || '',
-    notes[3] || '',
-    notes[4] || '',
-  ]);
+  const notes = parseSupportNotes(detail.supportNotes);
+  setEditSupportNotes([...notes, ...Array(Math.max(0, 5 - notes.length)).fill('')]);
 };
 
 
@@ -515,6 +506,8 @@ setSelectedResource({
       setSavingEdit(true);
       setError('');
       
+      const originalSupportNotes = String(selectedResource.supportNotes || '');
+      const supportNotes = editSupportNotes.map(note => note.trim()).filter(Boolean).join('｜');
      const result = await updateResource({
   fileId: selectedResource.fileId,
   area: editArea,
@@ -526,10 +519,7 @@ setSelectedResource({
   renameDriveFile: isAdminMode && renameDriveFile,
   tags: editTags,
   supportFlags: editSupportFlags,
-  supportNotes: editSupportNotes
-  .map(v => v.trim())
-  .filter(Boolean)
-  .join('｜'),
+  ...(supportNotes !== parseSupportNotes(originalSupportNotes).join('｜') && { originalSupportNotes, supportNotes }),
 }, accessCode);
       setPublicUpdateRevision((revision) => revision + 1);
 
@@ -1235,7 +1225,7 @@ syncEditForm(refreshed.item);
                             </div>
                             <div className="mt-4">
   <label className="mb-2 block text-sm font-bold text-slate-600">
-    {staff ? '必須情報メモ' : '情報メモを追加'}
+    情報メモを編集
   </label>
 
   <div className="space-y-2">

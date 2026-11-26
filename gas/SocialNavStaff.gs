@@ -3,7 +3,7 @@ function socialNavRead(request) {
   try {
     switch (params.action || 'search') {
       case 'ping':
-        return jsonOutput({ok: true, message: 'pong', version: 'archive-deletion-v1'});
+        return jsonOutput({ok: true, message: 'pong', version: 'editable-support-notes-v1'});
       case 'publicUpdates':
         return jsonOutput(socialNavPublicUpdates_());
       case 'search': {
@@ -22,7 +22,7 @@ function socialNavRead(request) {
         }
         const memoLogs = socialNavDeleted_(result.item) ? [] : socialNavPublicUpdates_(String(params.fileId)).entries
           .map(entry => ({logId: entry.updateId, memo: entry.message, createdAt: entry.publishedAt, createdBy: entry.displayName}));
-        return jsonOutput({ok: true, item: socialNavPublicResource_(result.item), memoLogs});
+        return jsonOutput({ok: true, item: {...socialNavPublicResource_(result.item), supportNotes: String(result.item.supportNotes || '')}, memoLogs});
       }
       case 'memoLogs':
         return jsonOutput({ok: false, error: 'Googleログインが必要です。'});
@@ -141,11 +141,21 @@ function socialNavWrite(request) {
           if (fields.some(field => /^\s*=/.test(String(body[field] || '')))) {
             return jsonOutput({ok: false, error: '基本情報の先頭に等号を入力できません。'});
           }
-          if (publicWrite) {
-            body.renameDriveFile = false;
-            const existingNotes = String(resource.item.supportNotes || '').split('｜').map(note => note.trim()).filter(Boolean);
-            const newNotes = String(body.supportNotes || '').split('｜').map(note => note.trim()).filter(Boolean);
-            body.supportNotes = [...new Set([...existingNotes, ...newNotes])].join('｜');
+          if (publicWrite) body.renameDriveFile = false;
+          const storedNotes = String(resource.item.supportNotes || '');
+          if (body.originalSupportNotes === undefined) {
+            if (body.supportNotes && body.supportNotes !== storedNotes) {
+              return jsonOutput({ok: false, error: '情報メモを編集するには画面を再読み込みしてください。'});
+            }
+            body.supportNotes = storedNotes;
+          } else {
+            if (body.originalSupportNotes !== storedNotes) {
+              return jsonOutput({ok: false, error: '情報メモが更新されています。詳細を開き直してから保存してください。'});
+            }
+            const count = value => String(value || '').split('｜').filter(note => note.trim()).length;
+            if (count(body.supportNotes) > Math.max(5, count(storedNotes))) {
+              return jsonOutput({ok: false, error: '情報メモは5件までです。既存の情報メモを修正してください。'});
+            }
           }
           const result = updateResource(body);
           if (result.ok) {

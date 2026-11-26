@@ -57,6 +57,7 @@ let fileName = '未整理.pdf';
 let resourceCreated = 0;
 let shouldFailMove = false;
 let rangeWrites = 0;
+let existingSupportNotes = '以前の情報メモ';
 const file = {
   isTrashed: () => isTrashed,
   setTrashed: (value) => { if (value && trashDenied) throw new Error('Drive access denied'); isTrashed = value; },
@@ -135,7 +136,7 @@ const context = createContext({
     getRange: (first, col, length) => ({ getValues: () => logs.slice(first - 2, first - 2 + length) }),
   }),
   rowToObject: (headers, row) => Object.fromEntries(headers.map((key, i) => [key, row[i]])),
-  getResource: () => ({ ok: true, item: { isDeleted: status[0], memo: '内部メモ', supportNotes: '以前の情報メモ', businessName: '操作例' }, memoLogs: logs }),
+  getResource: () => ({ ok: true, item: { isDeleted: status[0], memo: '内部メモ', supportNotes: existingSupportNotes, businessName: '操作例' }, memoLogs: logs }),
   searchResources: (params, includeStaffMemos = true) => ({
     ok: true, results: params.q && !includeStaffMemos ? [] : [{ fileId, memo: '内部メモ', supportNotes: '送迎は要相談' }],
   }),
@@ -268,8 +269,15 @@ assert.equal(request('resolveResourceChangeRequest', adminEmail, { requestId: re
 assert.equal(request('resolveResourceChangeRequest', adminEmail, { requestId: replacement.requestId, resolution: 'replacementDone' }).ok, true);
 assert.equal(request('listResourceChangeRequests', adminEmail).total, 0);
 assert.equal(status[0], false);
-assert.equal(read('detail', { fileId }).item.supportNotes, undefined);
-assert.equal(publicWrite('updateResource', { fileId, supportNotes: '以前の情報メモ｜内部の新しい情報メモ' }).ok, true);
+assert.equal(read('detail', { fileId }).item.supportNotes, '以前の情報メモ');
+assert.equal(publicWrite('updateResource', { fileId, originalSupportNotes: '古い画面', supportNotes: '変更' }).ok, false);
+assert.equal(publicWrite('updateResource', { fileId, originalSupportNotes: existingSupportNotes, supportNotes: '1｜2｜3｜4｜5｜6' }).ok, false);
+existingSupportNotes = '1｜2｜3｜4｜5｜6';
+assert.equal(publicWrite('updateResource', { fileId, originalSupportNotes: existingSupportNotes, supportNotes: '1｜2｜3｜4｜5｜修正' }).ok, true);
+assert.equal(savedResource.supportNotes, '1｜2｜3｜4｜5｜修正');
+assert.equal(publicWrite('updateResource', { fileId, originalSupportNotes: existingSupportNotes, supportNotes: '1｜2｜3｜4｜5｜6｜7' }).ok, false);
+existingSupportNotes = '以前の情報メモ';
+assert.equal(publicWrite('updateResource', { fileId, originalSupportNotes: '以前の情報メモ', supportNotes: '内部の新しい情報メモ' }).ok, true);
 context.socialNavRecordActivity_('registered', fileId, '自動同期', fileId);
 context.socialNavRecordActivity_('registered', fileId, '自動同期', fileId);
 const automatic = read('publicUpdates').entries;
