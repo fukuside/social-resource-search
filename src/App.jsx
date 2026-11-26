@@ -247,6 +247,7 @@ export default function App() {
   const canRename = selectedEditServices.length === 1
     && SERVICE_TYPES.includes(selectedEditServices[0])
     && selectedEditServices[0] !== 'すべて';
+  const latestSavedMemo = selectedResource?.memoLogs?.[0]?.memo || selectedResource?.memo;
   const resourceDeleted = String(selectedResource?.isDeleted || '').toLowerCase() === 'true';
   const filenameCategory = selectedEditServices[0] === '相談'
     ? currentConsultationTag(editTags) || '相談'
@@ -340,14 +341,14 @@ const handleReset = () => {
 };
 
   const syncEditForm = (detail) => {
-  setEditArea(detail.area || '');
-  setEditServiceType(detail.serviceType || '');
-  setEditBusinessName(detail.businessName || '');
-  setEditKeywords(detail.searchKeywords || '');
-  setEditPhone(detail.phone || '');
-  setEditAddress(detail.address || '');
-  setEditTags(detail.tags || '');
-  setEditSupportFlags(detail.supportFlags || '');
+  setEditArea(String(detail.area ?? ''));
+  setEditServiceType(String(detail.serviceType ?? ''));
+  setEditBusinessName(String(detail.businessName ?? ''));
+  setEditKeywords(String(detail.searchKeywords ?? ''));
+  setEditPhone(String(detail.phone ?? ''));
+  setEditAddress(String(detail.address ?? ''));
+  setEditTags(String(detail.tags ?? ''));
+  setEditSupportFlags(String(detail.supportFlags ?? ''));
   setRenameDriveFile(false);
 
   const notes = String(detail.supportNotes || '')
@@ -361,8 +362,6 @@ const handleReset = () => {
     notes[3] || '',
     notes[4] || '',
   ]);
-
-  setMemo('');
 };
 
 
@@ -416,6 +415,7 @@ const buildMapUrl = (resource) => {
         memoLogs: detail.memoLogs || []
       });
 
+      if (selectedResource?.fileId !== fileId) setMemo('');
       syncEditForm(detail.item);
     } catch (err) {
       setError(err.message || '詳細取得に失敗しました');
@@ -457,6 +457,7 @@ const buildMapUrl = (resource) => {
       if (!result.ok) {
         throw new Error(result.error || 'メモ保存に失敗しました');
       }
+      setMemo('');
       setPublicUpdateRevision((revision) => revision + 1);
 
       const refreshed = await getResourceDetail(selectedResource.fileId, accessCode || undefined);
@@ -464,7 +465,6 @@ setSelectedResource({
   ...refreshed.item,
   memoLogs: refreshed.memoLogs || [],
 });
-syncEditForm(refreshed.item);
       await loadResources();
     } catch (err) {
       setError(err.message || 'メモ保存に失敗しました');
@@ -1275,6 +1275,12 @@ syncEditForm(refreshed.item);
                   </div>
 
                   <fieldset className="min-w-0 space-y-3">
+                    {latestSavedMemo && (
+                      <div className="rounded-xl bg-violet-50 px-3 py-2 text-sm text-violet-900 ring-1 ring-violet-200">
+                        <p className="font-bold">現在の更新メモ</p>
+                        <p className="whitespace-pre-wrap break-words">{latestSavedMemo}</p>
+                      </div>
+                    )}
                     <textarea
                       aria-label="更新メモを入力"
                       maxLength={2000}
