@@ -67,16 +67,16 @@ export function ResourceChangeQueue({ accessCode, onClose, onChanged }) {
   const [failed, setFailed] = useState(false);
 
   async function run(entry, resolution, label) {
-    if (entry && !window.confirm(`${entry.businessName}の依頼を「${label}」として処理しますか？`)) return;
+    if (entry && !window.confirm(`${entry.businessName}の依頼を「${label}」として処理しますか？${resolution === 'drive' ? '\nゴミ箱へ移せない場合は「削除済みPDF」に移します。' : ''}`)) return;
     setBusy(true);
     setMessage('');
     setFailed(false);
     try {
       if (entry) {
-        await resolveResourceChangeRequest(entry.requestId, resolution, accessCode);
+        const result = await resolveResourceChangeRequest(entry.requestId, resolution, accessCode);
         setInbox((current) => ({ entries: current.entries.filter((value) => value.requestId !== entry.requestId), total: current.total - 1 }));
         await onChanged?.();
-        setMessage('依頼を処理しました。');
+        setMessage(result.status === 'archived' ? 'PDFを「削除済みPDF」に移し、検索から外しました。' : '依頼を処理しました。');
       }
       setInbox(await listResourceChangeRequests(accessCode));
     } catch (error) {
@@ -114,7 +114,7 @@ export function ResourceChangeQueue({ accessCode, onClose, onChanged }) {
             <div className="flex flex-wrap gap-2">
               {(entry.kind === 'replace'
                 ? [['replacementDone', 'Driveで差し替え済み']]
-                : [['search', 'PDFを残して検索対象外'], ['drive', 'PDFをゴミ箱へ移動']]
+                : [['search', 'PDFを残して検索対象外'], ['drive', 'PDFも削除する']]
               ).concat([['reject', '却下']]).map(([resolution, label]) => (
                 <button key={resolution} type="button" disabled={busy} onClick={() => run(entry, resolution, label)}
                   className={buttonClass}>{label}</button>

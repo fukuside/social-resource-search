@@ -3,7 +3,7 @@ function socialNavRead(request) {
   try {
     switch (params.action || 'search') {
       case 'ping':
-        return jsonOutput({ok: true, message: 'pong', version: 'public-information-notes-v1'});
+        return jsonOutput({ok: true, message: 'pong', version: 'archive-deletion-v1'});
       case 'publicUpdates':
         return jsonOutput(socialNavPublicUpdates_());
       case 'search': {
@@ -302,6 +302,13 @@ function socialNavChangeDeletion_(body) {
   if (body.action === 'restoreResource') {
     if (!deleted) return {ok: true};
     if (file.isTrashed()) file.setTrashed(false);
+    if (reason === 'archive' && !socialNavInFolder_(file)) {
+      const archive = socialNavArchiveFolder_(false);
+      if (!archive || !socialNavInFolder_(file, archive.getId())) {
+        return {ok: false, error: 'PDFが削除済みPDFフォルダーにありません。'};
+      }
+      file.moveTo(DriveApp.getFolderById(FOLDER_ID));
+    }
     if (!socialNavInFolder_(file)) {
       return {ok: false, error: 'PDFを検索用フォルダーに戻してから復元してください。'};
     }
@@ -309,28 +316,50 @@ function socialNavChangeDeletion_(body) {
     values[1] = '';
     values[5] = '';
   } else if (body.mode === 'drive') {
-    if (deleted && reason && reason !== 'drive') {
-      return {ok: false, error: 'いったん復元してからPDFを削除してください。'};
-    }
-    if (!file.isTrashed() && !socialNavInFolder_(file)) {
-      return {ok: false, error: 'PDFが検索用フォルダーにありません。'};
-    }
+    let destination = 'drive';
     if (!file.isTrashed()) {
-      try {
-        file.setTrashed(true);
-      } catch (error) {
-        console.error('Driveのゴミ箱へ移動できませんでした', error);
-        return {ok: false, error: 'DriveでPDFをゴミ箱へ移動できませんでした。PDFの所有者に確認するか、「PDFを残して検索対象外」を選んでください。'};
+      if (!socialNavInFolder_(file)) {
+        const archive = socialNavArchiveFolder_(false);
+        if (!archive || !socialNavInFolder_(file, archive.getId())) {
+          return {ok: false, error: 'PDFが検索用フォルダーまたは削除済みPDFフォルダーにありません。'};
+        }
+        destination = 'archive';
+      } else {
+        try {
+          file.setTrashed(true);
+        } catch (trashError) {
+          console.warn('Driveのゴミ箱へ移動できませんでした', trashError);
+          if (!file.isTrashed()) {
+            try {
+              file.moveTo(socialNavArchiveFolder_(true));
+              destination = 'archive';
+            } catch (moveError) {
+              console.error('削除済みPDFフォルダーへ移動できませんでした', moveError);
+              return {ok: false, error: 'PDFをゴミ箱にも削除済みPDFフォルダーにも移せませんでした。Driveの移動権限を確認してください。'};
+            }
+          }
+        }
       }
     }
     values[0] = true;
     values[1] = values[1] || new Date();
-    values[5] = 'drive';
+    values[5] = destination;
+    range.setValues([values]);
+    return {ok: true, destination};
   } else {
     return {ok: false, error: '削除方法を指定してください。'};
   }
   range.setValues([values]);
   return {ok: true};
+}
+
+function socialNavArchiveFolder_(create) {
+  const parent = DriveApp.getFolderById(FOLDER_ID);
+  const matches = parent.getFoldersByName('削除済みPDF');
+  if (!matches.hasNext()) return create ? parent.createFolder('削除済みPDF') : null;
+  const folder = matches.next();
+  if (matches.hasNext()) throw Error('検索用フォルダー内に削除済みPDFフォルダーが複数あります。');
+  return folder;
 }
 
 function socialNavFindPdf_(fileId) {
@@ -414,12 +443,12 @@ function socialNavResolveChange_(body, staff) {
   } else if (row[3] === 'delete' && ['search', 'drive'].includes(body.resolution)) {
     const result = socialNavChangeDeletion_({action:'deleteResource', fileId:row[1], mode:body.resolution});
     if (!result.ok) return result;
-    status = body.resolution === 'search' ? 'hidden' : 'trashed';
+    status = body.resolution === 'search' ? 'hidden' : result.destination === 'archive' ? 'archived' : 'trashed';
   } else {
     return {ok:false, error:'この依頼に対して選べない操作です。'};
   }
   data.sheet.getRange(index + 2, 9, 1, 3).setValues([[status, socialNavSheetText_(staff.name), new Date()]]);
-  return {ok:true};
+  return {ok:true, status};
 }
 
 const SOCIAL_NAV_PUBLIC_UPDATE_HEADERS = [

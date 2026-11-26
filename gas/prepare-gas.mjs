@@ -55,13 +55,13 @@ change('    if (file.getMimeType() !== MimeType.PDF) continue;\n\n    const file
     const fileId = file.getId();
     activeIds.add(fileId);`);
 change('      const existing = existingMap.get(fileId);\n      sheet.getRange', `      const existing = existingMap.get(fileId);
-      if (['search', 'drive', 'intake'].includes(existing.deletionReason)) continue;
+      if (['search', 'drive', 'archive', 'intake'].includes(existing.deletionReason)) continue;
       sheet.getRange`);
 for (const key of ['area', 'serviceType', 'businessName', 'keywords', 'tags']) {
   change('        existing.' + key + ' || parsed.' + key + ',', '        existing.manualOverride ? existing.' + key + ' : (existing.' + key + ' || parsed.' + key + '),');
 }
 change('for (const [fileId, existing] of existingMap.entries()) {\n', `for (const [fileId, existing] of existingMap.entries()) {
-  if (['search', 'drive', 'intake'].includes(existing.deletionReason)) continue;
+  if (['search', 'drive', 'archive', 'intake'].includes(existing.deletionReason)) continue;
 `);
 
 change('      // 削除済みPDFは検索結果から除外', '      if (item.deletionReason === "intake") return false;\n      // 削除済みPDFは検索結果から除外');

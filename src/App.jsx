@@ -428,7 +428,7 @@ const buildMapUrl = (resource) => {
     const fileId = selectedResource.fileId;
     const message = {
       search: 'PDFを残したまま検索対象から外しますか？',
-      drive: 'PDFをGoogle Driveのゴミ箱に移動し、検索対象から外しますか？',
+      drive: 'PDFをゴミ箱へ移し、検索対象から外しますか？ ゴミ箱へ移せない場合は「削除済みPDF」フォルダーに移します。',
       restore: 'PDFと登録データを検索対象に戻しますか？',
     }[mode];
     if (!window.confirm(message)) return;
@@ -1023,12 +1023,13 @@ syncEditForm(refreshed.item);
                     {resourceDeleted && <p className="text-sm">
                       {selectedResource.deletionReason === 'search' ? '検索対象外（PDFは保持）'
                         : selectedResource.deletionReason === 'drive' ? 'PDFをゴミ箱へ移動済み'
+                          : selectedResource.deletionReason === 'archive' ? '削除済みPDFフォルダーへ移動済み'
                           : '削除済み（同期で検出）'}
                     </p>}
                     <div className="flex flex-wrap gap-2">
                       {(resourceDeleted
-                        ? [['restore', '検索対象に復元']]
-                        : [['search', '検索対象から外す'], ['drive', 'PDFをゴミ箱に移動']]
+                        ? [['restore', '検索対象に復元'], ...(selectedResource.deletionReason === 'search' ? [['drive', 'PDFも削除する']] : [])]
+                        : [['search', '検索対象から外す'], ['drive', 'PDFも削除する']]
                       ).map(([mode, label]) => (
                         <button key={mode} type="button" disabled={changingDeletion || savingEdit || savingMemo}
                           onClick={() => changeDeletion(mode)} className="rounded-xl border px-3 py-2 text-sm font-bold">

@@ -47,6 +47,8 @@ const publicSheet = () => ({
 });
 let isTrashed = false;
 let trashDenied = false;
+let archiveCreated = false;
+const archiveFolder = { getId: () => 'archive-folder' };
 let responseCount = 0;
 let rowPresent = true;
 const queue = { data: [[fileId, '未整理.pdf', 'review', 'digest', '{}', '', new Date(), 1, '']] };
@@ -62,7 +64,7 @@ const file = {
   getParents: () => iterator([{ getId: () => parentId }]),
   getName: () => fileName,
   setName: (name) => { fileName = name; },
-  moveTo: () => { if (shouldFailMove) throw new Error('一時失敗'); parentId = 'search-folder'; },
+  moveTo: (folder) => { if (shouldFailMove) throw new Error('一時失敗'); parentId = folder.getId(); },
 };
 const iterator = (items) => ({ hasNext: () => items.length > 0, next: () => items.shift() });
 const rowRange = {
@@ -120,7 +122,12 @@ const context = createContext({
   UrlFetchApp: { fetch() { responseCount++; throw new Error('Unexpected live request'); } },
   DriveApp: {
     getFileById: () => { if (parentId === 'unavailable') throw new Error('gone'); return file; },
-    getFolderById: () => ({ getFilesByName: () => iterator([]) }),
+    getFolderById: (id) => ({
+      getId: () => id,
+      getFilesByName: () => iterator([]),
+      getFoldersByName: () => iterator(archiveCreated ? [archiveFolder] : []),
+      createFolder: () => { archiveCreated = true; return archiveFolder; },
+    }),
   },
   getSheet: () => sheet,
   getMemoLogSheet: () => ({
@@ -238,14 +245,20 @@ const deletion = request('listResourceChangeRequests', adminEmail).entries[0];
 assert.equal(deletion.requestedBy, '一般利用者');
 assert.equal(request('resolveResourceChangeRequest', staffEmail, { requestId: deletion.requestId, resolution: 'search' }).ok, false);
 trashDenied = true;
+shouldFailMove = true;
 const denied = request('resolveResourceChangeRequest', adminEmail, { requestId: deletion.requestId, resolution: 'drive' });
 assert.equal(denied.ok, false);
-assert.match(denied.error, /PDFを残して検索対象外/);
+assert.match(denied.error, /削除済みPDFフォルダーにも移せません/);
 assert.equal(request('listResourceChangeRequests', adminEmail).total, 1);
 assert.equal(isTrashed, false);
-trashDenied = false;
-assert.equal(request('resolveResourceChangeRequest', adminEmail, { requestId: deletion.requestId, resolution: 'search' }).ok, true);
+shouldFailMove = false;
+assert.equal(request('deleteResource', adminEmail, { fileId, mode: 'search' }).ok, true);
+assert.equal(request('resolveResourceChangeRequest', adminEmail, { requestId: deletion.requestId, resolution: 'drive' }).status, 'archived');
 assert.equal(status[0], true);
+assert.equal(status[5], 'archive');
+assert.equal(parentId, 'archive-folder');
+assert.equal(isTrashed, false);
+trashDenied = false;
 assert.equal(request('restoreResource', adminEmail, { fileId }).ok, true);
 assert.equal(publicWrite('requestResourceChange', { fileId, kind: 'replace', reason: '新版', replacementUrl: 'https://example.com/demo.pdf' }).ok, false);
 assert.equal(publicWrite('requestResourceChange', { fileId, kind: 'replace', reason: '新版', replacementUrl: 'https://drive.google.com/file/d/new-pdf-test123/view?usp=sharing' }).ok, true);
