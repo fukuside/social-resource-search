@@ -6,9 +6,16 @@ const CONFIGURED_GAS_URL = EXPLICIT_GAS_URL
 const GAS_URL = CONFIGURED_GAS_URL || PRODUCTION_GAS_URL;
 
 async function request(action, params = {}, accessCode, publicWrite = false) {
-  const url = new URL(accessCode === undefined ? GAS_URL : '/api/staff', window.location.origin);
+  const useResourceEdit = action === 'updateResource' && !accessCode &&
+    window.location.hostname === 'social-resource-search.vercel.app';
+  const endpoint = useResourceEdit ? '/api/resource-edit' : accessCode === undefined ? GAS_URL : '/api/staff';
+  const url = new URL(endpoint, window.location.origin);
   const options = { cache: 'no-store' };
-  if (publicWrite && !accessCode) {
+  if (useResourceEdit) {
+    options.method = 'POST';
+    options.headers = { 'Content-Type': 'application/json' };
+    options.body = JSON.stringify(params);
+  } else if (publicWrite && !accessCode) {
     options.method = 'POST';
     options.headers = { 'Content-Type': 'text/plain;charset=utf-8' };
     options.body = JSON.stringify({ ...params, action });

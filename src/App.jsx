@@ -502,6 +502,7 @@ setSelectedResource({
       if (!confirmed) return;
     }
 
+    let saved = false;
     try {
       setSavingEdit(true);
       setError('');
@@ -527,6 +528,7 @@ setSelectedResource({
         throw new Error(result.error || '情報更新に失敗しました');
       }
 
+      saved = true;
       const refreshed = await getResourceDetail(selectedResource.fileId, accessCode || undefined);
 setSelectedResource({
   ...refreshed.item,
@@ -537,7 +539,7 @@ syncEditForm(refreshed.item);
       await loadResources();
       if (result.warning) setError(result.warning);
     } catch (err) {
-      setError(err.message || '情報更新に失敗しました');
+      setError(saved ? '保存しましたが、画面を更新できませんでした。詳細を開き直してください。' : err.message || '情報更新に失敗しました');
     } finally {
       setSavingEdit(false);
     }
